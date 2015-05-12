@@ -169,7 +169,7 @@ class DeserializationResult(totalTime, restored) {
 DeserializationResult timeParse(String json) {
   value t0 = Stopwatch().start();
   value restored = Deserializer { 
-        input = StreamParser(StringTokenizer(json));
+        clazz = `Factura`;
         typeHinting = PropertyTypeHint{
             naming = LogicalTypeNaming(HashMap{
                 "Person" -> `NullPerson`,
@@ -179,7 +179,7 @@ DeserializationResult timeParse(String json) {
                 "Invoice" -> `NullInvoice`
             });
         }; 
-    }.deserialize(`Factura`);
+    }.deserialize(StreamParser(StringTokenizer(json)));
   //value restored = deser.parse(json).first;
   t0.stop();
   //assert(is Factura restored);

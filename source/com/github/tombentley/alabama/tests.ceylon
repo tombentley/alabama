@@ -1,6 +1,8 @@
+import ceylon.test {
+    test
+}
 
-
-//// "JavaBean style" will nullary constructors and `late` attributes 
+""" Example using "JavaBean style" will a nullary class parameter list and `late` attributes.""" 
 class LateInvoice() {
     shared late LatePerson bill;
     shared late LatePerson deliver;
@@ -67,8 +69,7 @@ LateInvoice exampleLate {
 }
 
 
-/// JavaBean style will null
-
+"""Example using "JavaBean style" with variable nullable attributes."""
 class NullInvoice() {
     shared variable NullPerson? bill = null;
     shared variable NullPerson? deliver = null;
@@ -137,8 +138,7 @@ NullInvoice exampleNull {
 
 
 
-/// "Ceylon style" with named constructor arguments
-
+"""Example of entities in "Ceylon style", using named constructor arguments"""
 class Invoice(bill, deliver, items) {
     shared Person bill;
     shared Person deliver;
@@ -237,3 +237,26 @@ String exampleJson = """{
                           ]
                           }
                           """;
+
+class Payment() {}
+class CreditCardPayment() extends Payment() {}
+class DebitCardPayment() extends Payment() {}
+
+test
+shared void testSerializeInvoice() {
+    serialize(example);
+}
+
+test
+shared void testSerializeLateInvoice() {
+    serialize(exampleLate);
+}
+
+test
+shared void testSerializeNullInvoice() {
+    serialize(exampleNull);
+}
+
+class NullaryConstructor {
+    new Constructor() {}
+}

@@ -136,6 +136,7 @@ interface ContainerBuilder {
 
 "A [[ContainerBuilder]] for building [[Sequence]]s and [[Sequential]]s."
 class SequenceBuilder() satisfies ContainerBuilder {
+    value sequenceType = typeLiteral<[Anything+]>();
     ArrayList<Anything> elements = ArrayList<Anything>(); 
     variable Type<Anything> elementType = `Nothing`;
     shared actual void addElement(Anything element) {
@@ -145,7 +146,7 @@ class SequenceBuilder() satisfies ContainerBuilder {
     shared actual Object instantiate(
         "A hint at the type originating from the metamodel"
         Type modelHint) {
-        if (modelHint.subtypeOf(typeLiteral<[Anything+]>())) {// wish there was an operator at the type level
+        if (modelHint.subtypeOf(sequenceType)) {
             variable value narrowed = `function Sequence.narrow`.memberInvoke(elements, [elementType]) else [];
             //narrowed = `function Iterable.sequence`.memberInvoke(narrowed) else [];
             assert(is Object seq = `function sequence`.invoke([elementType, `Null`], narrowed));
@@ -188,53 +189,18 @@ class ArrayBuilder() satisfies ContainerBuilder {
         Type<T>? keyHint);
 }*/
 
-"""A contract for obtaining a [[Type]] from the value of a 
-   "@type" property in the JSON data being deserialized.
-   """
-shared interface TypeNaming {
-    shared formal Type type(String name);
-    shared formal String name(Type type);
-}
-shared object fqTypeNaming satisfies TypeNaming {
-    shared actual Type type(String name) => parseType(name);
-    shared actual String name(Type<Anything> type) => type.string;
-}
-shared class LogicalTypeNaming({<String->Type>*} names) satisfies TypeNaming {
-    value toType = HashMap<String,Type>{*names};
-    value toName = HashMap<Type, String>{};
-    for (name -> type in names) {
-        toName.put(type, name);
+
+
+shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? typeHinting) {
+    
+    variable PeekIterator<BasicEvent>? input = null;
+    PeekIterator<BasicEvent> stream {
+        assert(exists i=input);
+        return i;
     }
-    shared actual Type type(String name) => toType[name] else nothing;
-    shared actual String name(Type<Anything> type) => toName[name] else nothing;
-}
-
-"""The addition of a property to a JSON object to encode the 
-   Ceylon type in some way.
-"""
-shared class PropertyTypeHint(property="class", naming=fqTypeNaming) {
-    shared String property;
-    shared TypeNaming naming;
-}
-/*
-"""The wrapping of a JSON object in a wrapper that encodes the 
-   Ceylon type in some way"""
-shared class WrapperObjectHint(typeProperty="class", valueProperty="value") {
-    shared String typeProperty;
-    shared String valueProperty;
-}
-
-"""The wrapping of a JSON object in a wrapper that encodes the 
-   Ceylon type in some way"""
-shared class WrapperArrayHint() {
     
-}*/
-
-shared class Deserializer(Iterator<BasicEvent>&Positioned input, PropertyTypeHint? typeHinting) {
-    
-    value stream = PeekIterator(input);
-    
-    shared Instance deserialize<Instance>(Type<Instance> clazz) {
+    shared Instance deserialize(Iterator<BasicEvent>&Positioned input) {
+        this.input = PeekIterator(input);
         assert(is Instance result = val(clazz));
         return result;
     }
@@ -295,21 +261,6 @@ shared class Deserializer(Iterator<BasicEvent>&Positioned input, PropertyTypeHin
         }
     }
     
-    "Given a Type reflecting an Iterable, returns a Type reflecting the 
-     iterated type or returns null if the given Type does not reflect an Iterable"
-    by("jvasileff")
-    Type<Anything>? iteratedType(Type<Anything> containerType) {
-        if (is ClassOrInterface<Anything> containerType,
-            exists model = containerType.satisfiedTypes
-                    .narrow<Interface<Iterable<Anything>>>().first,
-            exists x = model.typeArgumentList.first) {
-            //print("iteratedType(containerType=``containerType``): ``x``");
-            return x;
-        }
-        
-        return null;
-    }
-    
     Anything arr(Type modelType) {
         //print("arr(modelType=``modelType``)");
         assert(stream.next() is ArrayStartEvent);// consume initial {
@@ -317,7 +268,7 @@ shared class Deserializer(Iterator<BasicEvent>&Positioned input, PropertyTypeHin
         while (true) {
             switch(item=stream.peek)
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
-                builder.addElement(val(iteratedType(modelType) else `Nothing`));
+                builder.addElement(val(iteratedType(modelType)));
             }
             case (is ArrayEndEvent) {
                 stream.next();// consume ]
@@ -330,44 +281,6 @@ shared class Deserializer(Iterator<BasicEvent>&Positioned input, PropertyTypeHin
             }
             
         }
-    }
-    
-    Type eliminateNull(Type type) {
-        if (is UnionType type) {
-            if (type.caseTypes.size == 2,
-                exists nullIndex=type.caseTypes.firstOccurrence(`Null`)) {
-                assert(exists definite = type.caseTypes[1-nullIndex]);
-                return definite;
-            } else {
-                return type;
-            }
-        } else {
-            return type;
-        }
-    }
-    
-    "Figure out the type of the attribute of the given name that's a member of
-     modelType or jsonType"
-    Type attributeType(Type modelType, Type jsonType, String attributeName) {
-        variable Type type = modelType.union(jsonType);
-        // since we know we're finding the type of an attribute on an object
-        // we know that object can't be null
-        Type qualifierType = eliminateNull(type);
-        ////print("attributeType(``modelType``, ``jsonType``, ``attributeName``): qualifierType: ``qualifierType``");
-        Type result;
-        if (is ClassOrInterface qualifierType) {
-            // We want to do qualifierType.getAttribute(), but we have to do it with runtime types
-            // not compile time types, so we have to do go via the metamodel.
-            //value r = `function ClassOrInterface.getAttribute`.memberInvoke(qualifierType, [qualifierType, `Anything`, `Nothing`], attributeName);
-            //assert(is Attribute<Nothing, Anything, Nothing> r);
-            //result = r.type;
-            assert(exists a = qualifierType.getAttribute<Nothing,Anything,Nothing>(attributeName));
-            return a.type;
-        } else {
-            result = `Nothing`;
-        }
-        //print("attributeType(``modelType``, ``jsonType``, ``attributeName``): result: ``result``");
-        return result;
     }
     
     "Consume the next object from the [[stream]] and return the instance for it"
@@ -453,8 +366,8 @@ shared void run() {
     variable value d = ArrayList<DeserializationResult>(times);
     for (i in 0:times) {
         stw.start();
-        value x = Deserializer { 
-            input = StreamParser(StringTokenizer(exampleJson));
+        value x = Deserializer {
+            clazz = `Invoice`;
             typeHinting = PropertyTypeHint{
                 naming = LogicalTypeNaming(HashMap{
                     "Person" -> `NullPerson`,
@@ -464,7 +377,7 @@ shared void run() {
                     "Invoice" -> `NullInvoice`
                 });
             }; 
-        }.deserialize(`Invoice`);
+        }.deserialize(StreamParser(StringTokenizer(exampleJson)));
         d.add(DeserializationResult(stw.read, x));
     }
     statDeser(d);
@@ -473,8 +386,8 @@ shared void run() {
     d = ArrayList<DeserializationResult>(times);
     for (i in 0:times) {
         stw.start();
-        value x = Deserializer { 
-            input = StreamParser(StringTokenizer(exampleJson));
+        value x = Deserializer {
+            clazz = `Invoice`;
             typeHinting = PropertyTypeHint{
                 naming = LogicalTypeNaming(HashMap{
                     "Person" -> `NullPerson`,
@@ -484,9 +397,62 @@ shared void run() {
                     "Invoice" -> `NullInvoice`
                 });
             }; 
-        }.deserialize(`Invoice`);
+        }.deserialize(StreamParser(StringTokenizer(exampleJson)));
         d.add(DeserializationResult(stw.read, x));
     }
     statDeser(d);
+}
 
+"Given a Type reflecting an Iterable, returns a Type reflecting the 
+ iterated type or returns null if the given Type does not reflect an Iterable"
+by("jvasileff")
+Type<Anything> iteratedType(Type<Anything> containerType) {
+    if (is ClassOrInterface<Anything> containerType,
+        exists model = containerType.satisfiedTypes
+                .narrow<Interface<Iterable<Anything>>>().first,
+        exists x = model.typeArgumentList.first) {
+        //print("iteratedType(containerType=``containerType``): ``x``");
+        return x;
+    }
+    
+    return `Nothing`;
+}
+
+"Figure out the type of the attribute of the given name that's a member of
+ modelType or jsonType"
+Type attributeType(Type modelType, Type jsonType, String attributeName) {
+    variable Type type = modelType.union(jsonType);
+    // since we know we're finding the type of an attribute on an object
+    // we know that object can't be null
+    Type qualifierType = eliminateNull(type);
+    ////print("attributeType(``modelType``, ``jsonType``, ``attributeName``): qualifierType: ``qualifierType``");
+    Type result;
+    if (is ClassOrInterface qualifierType) {
+        // We want to do qualifierType.getAttribute(), but we have to do it with runtime types
+        // not compile time types, so we have to do go via the metamodel.
+        //value r = `function ClassOrInterface.getAttribute`.memberInvoke(qualifierType, [qualifierType, `Anything`, `Nothing`], attributeName);
+        //assert(is Attribute<Nothing, Anything, Nothing> r);
+        //result = r.type;
+        assert(exists a = qualifierType.getAttribute<Nothing,Anything,Nothing>(attributeName));
+        return a.type;
+    } else {
+        result = `Nothing`;
+    }
+    //print("attributeType(``modelType``, ``jsonType``, ``attributeName``): result: ``result``");
+    return result;
+}
+
+
+Type eliminateNull(Type type) {
+    if (is UnionType type) {
+        if (type.caseTypes.size == 2,
+            exists nullIndex=type.caseTypes.firstOccurrence(`Null`)) {
+            assert(exists definite = type.caseTypes[1-nullIndex]);
+            return definite;
+        } else {
+            return type;
+        }
+    } else {
+        return type;
+    }
 }
