@@ -260,3 +260,13 @@ shared void testSerializeNullInvoice() {
 class NullaryConstructor {
     new Constructor() {}
 }
+
+// TODO test ser, deser with nallary constructor
+// TODO test ser, deser annotated constructor
+// TODO test ser, deser with polymorphism
+// TODO test ser, deser with the JSON types
+// TODO test ser, deser with a tuple typed-attribute
+// TODO test ser, deser with a tuple at toplevel
+// TODO test ser, deser with enumerated types
+// TODO support and test "type inference" with enumerated types
+// TODO support ser, deser with wrapper objects and arrays

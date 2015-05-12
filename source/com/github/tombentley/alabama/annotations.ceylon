@@ -40,7 +40,7 @@ shared final annotation class LogicalName(name)
         satisfies OptionalAnnotation<LogicalName, ClassDeclaration>{
     shared String name;
 }
-"Annotates a class to give its logical name. Used with [[LogicalTypeNaming]]."
+"Annotates a class to give itsh logical name. Used with [[LogicalTypeNaming]]."
 shared annotation LogicalName logicalName(String name) => LogicalName(name);
 
 logicalName("Example")

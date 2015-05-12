@@ -13,6 +13,10 @@ import ceylon.language.meta.declaration {
 import ceylon.collection {
     HashMap
 }
+import ceylon.json {
+    Visitor,
+    StringEmitter
+}
 
 shared interface Memberizer {
     shared formal void serializeMembers(Class<Object> c, Object instance, Member serializer);
@@ -55,17 +59,7 @@ shared interface Member {
     shared formal void member(String name, Type modelType, Anything instance);
 }
 
-class Stack(parent) {
-    shared Stack? parent;
-    //shared Object instance;
-    shared variable Integer num = 0;
-}
-
-shared abstract class Serializer() satisfies Member{
-    
-    variable Stack? stack = null;
-    
-    shared formal void print(String s);
+shared class Serializer(Visitor visitor) satisfies Member{
     
     ConstructorDeclaration? hasNullaryConstructor(Class<Object> c) {
         for (ctor in c.declaration.constructorDeclarations()) {
@@ -94,71 +88,43 @@ shared abstract class Serializer() satisfies Member{
         return result;
     }
     
-    void nul() {
-        print("null");
-    }
-    
-    void int(Integer|Float instance) {
-        print(instance.string);
-    }
-    
-    void str(String instance) {
-        // TODO quoting
-        print("\"");
-        print(instance);
-        print("\"");
-    }
-    
-    void bool(Boolean instance) {
-        print(instance.string);
-    }
     
     void arr(Type modelType, {Anything*} instance) {
         value it = iteratedType(modelType);
-        print("[");
+        visitor.onStartArray();
         variable Boolean comma = false;
         for (Anything r in instance) {
             if (comma) {
-                print(",");
+                //print(",");
             }
             val(it, r);
             comma = true;
         }
-        print("]");
+        visitor.onEndArray();
     }
     
     void obj(Type modelType, Object instance) {
-        this.stack = Stack(this.stack);
-        print("{");
+        visitor.onStartObject();
         assert(is Class<Object> c = type(instance));
         // TODO chose between the two depending on annotations, constructors etc.
         memberizer(c).serializeMembers(c, instance, this);
-        print("}");
-        assert(exists s = this.stack);
-        this.stack = s.parent;
+        visitor.onEndObject();
     }
     
     shared actual void member(String name, Type modelType, Anything instance) {
-        if (exists s=stack) {
-            if (s.num > 0) {
-                print(",");
-            }
-            s.num++;
-        }
-        str(name);
-        print(":");
+        visitor.onKey(name);
         val(modelType, instance);
     }
     
     void val(Type modelType, Anything instance) {
         if (!exists instance) {
-            nul();
+            visitor.onNull();
         } else if (is Integer|Float instance) {
-            int(instance);
+            visitor.onNumber(instance);
         } else if (is String instance) {
-            str(instance);
+            visitor.onString(instance);
         } else if (is Boolean instance) {
-            bool(instance);
+            visitor.onBoolean(instance);
         } else if (is {Anything*} instance) {
             arr(modelType, instance);
         } else {
@@ -171,20 +137,12 @@ shared abstract class Serializer() satisfies Member{
     }
 }
 
-shared class StringSerializer() extends Serializer() {
-    StringBuilder sb = StringBuilder();
-    
-    shared actual void print(String s) {
-        sb.append(s);
-    }
-    
-    shared actual String string => sb.string;
-}
 
 shared String serialize(Anything instance) {
-    StringSerializer ss = StringSerializer();
+    value em = StringEmitter();
+    Serializer ss = Serializer(em);
     ss.serialize(instance);
-    return ss.string;
+    return em.string;
 }
 shared void runser() {
     print(serialize(example));
