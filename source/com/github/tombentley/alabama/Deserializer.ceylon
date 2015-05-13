@@ -31,7 +31,8 @@ import ceylon.json.stream {
 }
 import ceylon.language.meta.declaration {
     Package,
-    ClassDeclaration
+    ClassDeclaration,
+    ValueDeclaration
 }
 
 abstract class None() of none{}
@@ -124,6 +125,47 @@ class NullaryInvocationAndInjection() satisfies ObjectBuilder {
         }
         return instance;
     }
+}
+/*
+ [
+ { "@id": 1,
+   "name": "rod"
+   "@children": [2, 3]
+ },
+ { "@id": 2,
+   "name": "tom",
+   "@father": 1
+ },
+ { "@id": 3,
+   "name": "ruth",
+   "@father": 1
+ }
+ ]
+ */
+class S11nBuilder(Deser<Integer> dc) satisfies ObjectBuilder {
+    
+    variable Integer id = 0;
+    
+    shared void startObject() {
+        id++;
+    }
+    
+    shared actual void bindAttribute(String attributeName, Anything attributeValue) {
+        ValueDeclaration vd = lookup(attributeName);
+        if (attributeName.startsWith("@")) {
+            assert(is Integer attributeValue);
+            dc.attribute(id, vd, attributeValue);
+        } else {
+            dc.attribute(id, vd, id+1);
+        }
+    }
+    
+    shared actual Object instantiate(Type<Anything> modelHint, Type<Anything> keyHint) {
+        Class clazz = nothing;
+        dc.instance(id, clazz);
+        return dc.reconstruct(id);
+    }
+    
 }
 
 "A contract for building collection-like things from JSON arrays."
