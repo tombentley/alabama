@@ -1,5 +1,10 @@
 import ceylon.test {
-    test
+    test,
+    assertEquals,
+    fail
+}
+import ceylon.language.meta.declaration {
+    ValueDeclaration
 }
 
 """ Example using "JavaBean style" will a nullary class parameter list and `late` attributes.""" 
@@ -165,40 +170,179 @@ class Product(sku, description, unitPrice, salesTaxRate) {
 
 Invoice example => Invoice {
     bill = Person {
-        name = "";
+        name = "Mr Pig";
         address = Address {
-            lines = [""];
-            postCode = "";
+            lines = ["3 Pigs House", "The Farm"];
+            postCode = "3PH";
         };
     };
     deliver = Person {
-        name = "";
+        name = "Mr Pig";
         address = Address {
-            lines = [""];
-            postCode = "";
+            lines = ["3 Pigs House", "The Farm"];
+            postCode = "3PH";
         };
     };
     items = [
     Item {
         product = Product {
-            sku="";
-            description = "";
-            unitPrice = 2.0;
+            sku="123";
+            description = "Bag of sand";
+            unitPrice = 2.34;
             salesTaxRate = 0.2;
         };
-        quantity = 1.0;
+        quantity = 4.0;
     },
     Item {
         product = Product {
-            sku="";
-            description = "";
-            unitPrice = 2.0;
+            sku="876";
+            description = "Bag of cement";
+            unitPrice = 3.57;
             salesTaxRate = 0.2;
         };
         quantity = 1.0;
     }
     ];
 };
+
+test
+shared void serializeInvoice() {
+    assertEquals("""{
+                     "bill": {
+                      "name": "Mr Pig",
+                      "address": {
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ],
+                       "postCode": "3PH"
+                      }
+                     },
+                     "deliver": {
+                      "name": "Mr Pig",
+                      "address": {
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ],
+                       "postCode": "3PH"
+                      }
+                     },
+                     "items": [
+                      {
+                       "product": {
+                        "sku": "123",
+                        "description": "Bag of sand",
+                        "unitPrice": 2.34,
+                        "salesTaxRate": 0.2
+                       },
+                       "quantity": 4.0
+                      },
+                      {
+                       "product": {
+                        "sku": "876",
+                        "description": "Bag of cement",
+                        "unitPrice": 3.57,
+                        "salesTaxRate": 0.2
+                       },
+                       "quantity": 1.0
+                      }
+                     ]
+                    }""", 
+    serialize(example, true));
+}
+test
+shared void serializeNullInvoice() {
+    assertEquals(serialize(exampleNull, true),
+                 """{
+                     "bill": {
+                      "address": {
+                       "postCode": "3PH",
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ]
+                      },
+                      "name": "Mr Pig"
+                     },
+                     "items": [
+                      {
+                       "product": {
+                        "salesTaxRate": 0.2,
+                        "description": "Bag of sand",
+                        "unitPrice": 2.34,
+                        "sku": "123"
+                       },
+                       "quantity": 4.0
+                      },
+                      {
+                       "product": {
+                        "salesTaxRate": 0.2,
+                        "description": "Bag of cement",
+                        "unitPrice": 3.57,
+                        "sku": "876"
+                       },
+                       "quantity": 1.0
+                      }
+                     ],
+                     "deliver": {
+                      "address": {
+                       "postCode": "3PH",
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ]
+                      },
+                      "name": "Mr Pig"
+                     }
+                    }""");
+}
+test
+shared void serializeLateInvoice() {
+    assertEquals(serialize(exampleLate, true),
+                 """{
+                     "bill": {
+                      "address": {
+                       "postCode": "3PH",
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ]
+                      },
+                      "name": "Mr Pig"
+                     },
+                     "deliver": {
+                      "address": {
+                       "postCode": "3PH",
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ]
+                      },
+                      "name": "Mr Pig"
+                     },
+                     "items": [
+                      {
+                       "product": {
+                        "salesTaxRate": 0.2,
+                        "description": "Bag of sand",
+                        "unitPrice": 2.34,
+                        "sku": "123"
+                       },
+                       "quantity": 4.0
+                      },
+                      {
+                       "product": {
+                        "salesTaxRate": 0.2,
+                        "description": "Bag of cement",
+                        "unitPrice": 3.57,
+                        "sku": "876"
+                       },
+                       "quantity": 1.0
+                      }
+                     ]
+                    }""");
+}
 
 String exampleJson = """{ 
                           "bill": {
@@ -238,26 +382,115 @@ String exampleJson = """{
                           }
                           """;
 
-class Payment() {}
-class CreditCardPayment() extends Payment() {}
-class DebitCardPayment() extends Payment() {}
 
-test
-shared void testSerializeInvoice() {
-    serialize(example);
+//logicalName("Example")
+ignoredKeys("gee")
+class AnnotationsExample(bar, baz) {
+    key("foo")
+    aliasedKey("fooble")
+    shared String bar;
+    
+    omittedAttribute
+    shared String baz;
+}
+
+ignoredKeys("foo")
+class AnnotationsExample2(bar) {
+    key("foo")
+    shared String bar;
+}
+
+ignoredKeys("foo")
+class AnnotationsExample3(bar) {
+    aliasedKey("foo")
+    shared String bar;
+}
+
+class AnnotationsExample4(bar) {
+    aliasedKey("fooble")
+    shared String bar;
+}
+class AnnotationsExample5(bar) {
+    omittedAttribute
+    aliasedKey("fooble")
+    shared String bar;
+}
+class AnnotationsExample6(bar) {
+    omittedAttribute
+    key("fooble")
+    shared String bar;
 }
 
 test
-shared void testSerializeLateInvoice() {
-    serialize(exampleLate);
+shared void readingAnnotations() {
+    variable value cs = readClass(`class AnnotationsExample`, namedParameterMemberizer);
+    assert(`class AnnotationsExample` == cs.clazz);
+    assert(["gee"] == cs.ignoredKeys);
+    assert(`value AnnotationsExample.baz` in cs.omittedAttributes);
+    assert(exists b= cs.keys["foo"]);
+    assert(exists b2= cs.keys["fooble"]);
+    assert(b===b2);
+    assert(b.attr == `value AnnotationsExample.bar`);
+    assert(b.key == "foo");
+    
+    try {
+        cs = readClass(`class AnnotationsExample2`, namedParameterMemberizer);
+        fail("excepted exception");
+    } catch (AssertionError e) {
+        assertEquals(e.message, """ignored keys cannot also be keys: foo""");
+    }
+    try {
+        cs = readClass(`class AnnotationsExample3`, namedParameterMemberizer);
+        fail("excepted exception");
+    } catch (AssertionError e) {
+        assertEquals(e.message, "ignored keys cannot also be keys: foo");
+    }
+    
+    cs = readClass(`class AnnotationsExample4`, namedParameterMemberizer);
+    assert(exists b3= cs.keys["bar"]);
+    assert(exists b4= cs.keys["fooble"]);
+    assert(b3===b4);
+    assert(b3.attr == `value AnnotationsExample4.bar`);
+    assert(b3.key == "bar");
+    
+    cs = readClass(`class AnnotationsExample5`, namedParameterMemberizer);
+    cs = readClass(`class AnnotationsExample6`, namedParameterMemberizer);
+}
+
+class Generic<Element>(element) {
+    shared Element element;
+}
+test
+shared void generic() {
+    // TODO 
+    print(serialize(Generic("string")));
+    print(serialize(Generic(1)));
+    print(serialize(Generic(Generic("string"))));
+}
+
+abstract class Payment(amount) {
+    shared Float amount;
+}
+class CreditCardPayment(Float amount, cardNumber) extends Payment(amount) {
+    shared String cardNumber;
+}
+class DebitCardPayment(Float amount, cardNumber) extends Payment(amount) {
+    shared String cardNumber;
 }
 
 test
-shared void testSerializeNullInvoice() {
-    serialize(exampleNull);
+shared void poly1() {
+    print(serialize(CreditCardPayment(0.99, "1234 5678 1234 5678")));
 }
 
 class NullaryConstructor {
+    shared new () {
+        assert(false);
+    }
+    new WrongConstructor() {
+        assert(false);
+    }
+    deserialization
     new Constructor() {}
 }
 

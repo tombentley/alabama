@@ -4,11 +4,13 @@ import ceylon.language.meta {
 import ceylon.language.meta.model {
     Class,
     Type,
-    Attribute
+    Attribute,
+    Constructor
 }
 import ceylon.language.meta.declaration {
     ValueDeclaration,
-    ConstructorDeclaration
+    ConstructorDeclaration,
+    ClassDeclaration
 }
 import ceylon.collection {
     HashMap
@@ -18,15 +20,30 @@ import ceylon.json {
     StringEmitter
 }
 
+"Figures out what the members of the JSON hash should be, and calls back on 
+ the serializer with those members.
+ 
+ In effect implementors encapsulate a construction strategy for the instance"
 shared interface Memberizer {
-    shared formal void serializeMembers(Class<Object> c, Object instance, Member serializer);
+    shared formal void serializeMembers(ClassSerialization cs, Class<Object> c, 
+        Object instance, Member serializer);
 }
 
+"Treats all constructor parameters of [[serializeMembers.c]] as members of 
+ the JSON hash, thus permitting construction via (named argument) instantiation"
+see(`class NamedInvocation`)
 shared object namedParameterMemberizer satisfies Memberizer {
         
-    shared actual void serializeMembers(Class<Object> c, Object instance, Member serializer) {
-        value pds = c.declaration.parameterDeclarations;
-        value pts = c.parameterTypes;
+    shared actual void serializeMembers(ClassSerialization cs, Class<Object> c, 
+            Object instance, Member serializer) {
+        value pds = cs.constructor.parameterDeclarations;
+        Type<Anything>[] pts;
+        if (cs.constructor is ConstructorDeclaration) {
+            assert(exists ctor = c.getConstructor(cs.constructor.name));
+            pts = ctor.parameterTypes;
+        } else {
+            pts = c.parameterTypes;
+        }
         variable value index = 0;
         for (pd in pds) {
             assert(exists pt=pts[index]);
@@ -38,9 +55,13 @@ shared object namedParameterMemberizer satisfies Memberizer {
     }
 }
 
+"Treats all `variable` or `late` attributes of the instance as members, thus 
+ requiring a nullary class initializer or constructor for deserialization."
+see(`class NullaryInvocationAndInjection`)
 shared object variableOrLateMemberizer satisfies Memberizer {
-    shared actual void serializeMembers(Class<Object> c, Object instance, Member serializer) {
-        value cd = c.declaration;
+    shared actual void serializeMembers(ClassSerialization cs, Class<Object> c, 
+        Object instance, Member serializer) {
+        value cd = cs.clazz;
         for (ad in cd.memberDeclarations<ValueDeclaration>()) {
             if (ad.variable 
                 || ad.late) {
@@ -59,7 +80,42 @@ shared interface Member {
     shared formal void member(String name, Type modelType, Anything instance);
 }
 
-shared class Serializer(Visitor visitor) satisfies Member{
+
+interface TypeHinter {
+    shared formal void hint(Type type, Visitor visitor);
+}
+
+class WrapperObjectTypeHinter(PropertyTypeHint property) satisfies TypeHinter {
+    shared actual void hint(Type<Anything> type, Visitor visitor) {
+        visitor.onStartObject();
+        visitor.onKey(property.property);
+        visitor.onString(property.naming.name(type));
+        visitor.onKey("value");
+        // TODO delegate to ??? to continue tree walk
+        visitor.onEndObject();
+    }
+}
+class WrapperArrayTypeHinter(TypeNaming typeNaming) satisfies TypeHinter {
+    shared actual void hint(Type<Anything> type, Visitor visitor) {
+        visitor.onStartObject();
+        visitor.onString(typeNaming.name(type));
+        // TODO delegate to ??? to continue tree walk
+        visitor.onEndObject();
+    }
+}
+class PropertyTypeHinter(PropertyTypeHint property) satisfies TypeHinter {
+    shared actual void hint(Type type, Visitor visitor) {
+        visitor.onKey(property.property);
+        visitor.onString(property.naming.name(type));
+    }
+}
+
+"""A Serializer converts a tree of Ceylon objects to JSON. 
+   It's not much more than a way to introspect an recurse through an object tree, really."""
+see(`function serialize`)
+shared class Serializer() satisfies Member{
+    
+    late variable Visitor visitor;
     
     ConstructorDeclaration? hasNullaryConstructor(Class<Object> c) {
         for (ctor in c.declaration.constructorDeclarations()) {
@@ -70,35 +126,39 @@ shared class Serializer(Visitor visitor) satisfies Member{
         return null;
     }
     
-    HashMap<Class<Object>, Memberizer> mc = HashMap<Class<Object>, Memberizer>();
+    HashMap<ClassDeclaration, ClassSerialization> metadata = HashMap<ClassDeclaration, ClassSerialization>();
     
-    Memberizer memberizer(Class<Object> c) {
-        Memberizer result;
-        if (exists r = mc[c]) {
-            result = r;
-        } else { 
-            if (c is Class<Object, []>
-                || hasNullaryConstructor(c) exists) {
-                result = variableOrLateMemberizer;
+    ClassSerialization model(Class<Object> clazz) {
+        ClassSerialization cs;
+        if (exists r = metadata[clazz.declaration]) {
+            cs = r;
+        } else {
+            Memberizer memberizer;
+            if (clazz is Class<Object, []>
+                || hasNullaryConstructor(clazz) exists) {
+                // TODO chose between the two depending on annotations, constructors etc.
+                memberizer = variableOrLateMemberizer;
             } else {
-                result = namedParameterMemberizer;
+                memberizer = namedParameterMemberizer;
             }
-            mc.put(c, result);
+            cs = readClass(clazz.declaration, memberizer);
+            
+            metadata.put(clazz.declaration, cs);
         }
-        return result;
+        return cs;
     }
     
+    Type? typeInfo() {
+        // TODO
+        // if the actual type is different from the model type
+        return null;
+    }
     
     void arr(Type modelType, {Anything*} instance) {
         value it = iteratedType(modelType);
         visitor.onStartArray();
-        variable Boolean comma = false;
         for (Anything r in instance) {
-            if (comma) {
-                //print(",");
-            }
             val(it, r);
-            comma = true;
         }
         visitor.onEndArray();
     }
@@ -106,8 +166,8 @@ shared class Serializer(Visitor visitor) satisfies Member{
     void obj(Type modelType, Object instance) {
         visitor.onStartObject();
         assert(is Class<Object> c = type(instance));
-        // TODO chose between the two depending on annotations, constructors etc.
-        memberizer(c).serializeMembers(c, instance, this);
+        value m = model(c);
+        m.memberizer.serializeMembers(m, c, instance, this);
         visitor.onEndObject();
     }
     
@@ -132,20 +192,17 @@ shared class Serializer(Visitor visitor) satisfies Member{
         }
     }
     
-    shared void serialize(Anything instance, Type modelType=type(instance)) {
+    "Serialize the given [[instance]] as events on the given [[visitor]]."
+    shared void serialize(Visitor visitor, Anything instance, Type modelType=type(instance)) {
+        this.visitor = visitor;
         val(modelType, instance);
     }
 }
 
-
-shared String serialize(Anything instance) {
-    value em = StringEmitter();
-    Serializer ss = Serializer(em);
-    ss.serialize(instance);
+"A utility for serializing an instance to a JSON-formatted String."
+shared String serialize(Anything instance, Boolean pretty = false) {
+    value em = StringEmitter(pretty);
+    Serializer ss = Serializer();
+    ss.serialize(em, instance);
     return em.string;
-}
-shared void runser() {
-    print(serialize(example));
-    print(serialize(exampleNull));
-    print(serialize(exampleLate));
 }
