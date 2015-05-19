@@ -27,7 +27,8 @@ import ceylon.language.meta.model {
     UnionType,
     Type,
     ClassOrInterface,
-    ClassModel
+    ClassModel,
+    Attribute
 }
 import ceylon.language.serialization {
     DeserializationContext,
@@ -39,16 +40,16 @@ object none extends None() {}
 
 
 class S11nBuilder<Id>(DeserializationContext<Id> dc, clazz, id) 
-        given Id satisfies Object{
+        given Id satisfies Object {
     
     ClassModel<Object> clazz;
     Id id;
     
-    shared void bindAttribute(String attributeName, Id attributeValue) {
+    shared void bindAttribute(Attribute<> attribute, Id attributeValue) {
         //print("bindAttribute(``attributeName``, ``attributeValue``) ``clazz``");
-        assert(exists attr = clazz.getAttribute<Nothing,Anything>(attributeName)); 
-        ValueDeclaration vd = attr.declaration;
-        if (attributeName.startsWith("@")) {
+        //assert(exists attr = clazz.getAttribute<Nothing,Anything>(attributeName)); 
+        ValueDeclaration vd = attribute.declaration;
+        if (vd.name.startsWith("@")) {
             dc.attribute(id, vd, attributeValue);
         } else {
             // XXX I can't do this, because instantiate will have returned 
@@ -239,19 +240,6 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
         }
     }
     
-    function obtainBuilder(Type<> modelType, Type<> keyType) {
-        Class<Object> clazz;// TODO use hints to figure out an instantiable class
-        if (is Class<Object> k=keyType) {
-            clazz = k;
-        } else if (is Class<Object> m=modelType) {
-            clazz = m;
-        } else {
-            clazz = nothing;
-        }
-        S11nBuilder<Integer> builder = S11nBuilder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
-        return builder;
-    }
-    
     "Consume the next object from the [[stream]] and return the instance for it"
     Integer obj(Type<> modelType) {
         //print("obj(modelType=``modelType``)");
@@ -279,16 +267,16 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
         } else {
             dataType = `Nothing`;
         }
-        value m = eliminateNull(modelType);
-        value d = eliminateNull(dataType);
-        value builder = obtainBuilder(m, d);
-        variable String? attributeName = null;
+        Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
+        S11nBuilder<Integer> builder = S11nBuilder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
+        
+        variable Attribute<>? attribute = null;
         while(true) {
             switch (item = stream.peek)
             case (is ObjectStartEvent) {
-                assert(exists a=attributeName);
-                builder.bindAttribute(a, obj(attributeType(modelType, dataType, a)));
-                attributeName = null;
+                assert(exists attr=attribute);
+                builder.bindAttribute(attr, obj(attr.type));
+                attribute = null;
             }
             case (is ObjectEndEvent) {
                 stream.next();// consume what we peeked
@@ -298,9 +286,9 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
                 throw Exception("unexpected end of stream");
             }
             case (is ArrayStartEvent) {
-                assert(exists a=attributeName);
-                builder.bindAttribute(a, arr(eliminateNull(attributeType(modelType, dataType, a))));
-                attributeName = null;
+                assert(exists attr=attribute);
+                builder.bindAttribute(attr, arr(eliminateNull(attr.type)));
+                attribute = null;
             }
             case (is ArrayEndEvent) {
                 "should never happen"
@@ -309,12 +297,12 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
             case (is KeyEvent) {
                 stream.next();// consume what we peeked
                 //print("key: ``item.eventValue``");
-                attributeName = item.eventValue;
+                attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), item.eventValue);
             }
             case (is String|Integer|Float|Boolean|Null) {
-                assert(exists a=attributeName);
-                builder.bindAttribute(a, val(attributeType(modelType, dataType, a)));
-                attributeName = null;
+                assert(exists attr=attribute);
+                builder.bindAttribute(attr, val(attr.type));
+                attribute = null;
             }
         }
     }
@@ -337,7 +325,9 @@ shared void run() {
     variable value hs = 0;
     for (i in 1..times) {
         value x = deserializer.deserialize(StreamParser(StringTokenizer(exampleJson)));
-        //print(x);
+        if (i == 1) {
+            print(x);
+        }
         hs+=x.hash; 
     }
     print("press enter");
@@ -356,7 +346,17 @@ shared void run() {
 }
 
 
-
+Class<Object> bestType(Type<> modelType, Type<> keyType) {
+    Class<Object> clazz;// TODO use hints to figure out an instantiable class
+    if (is Class<Object> k=keyType) {
+        clazz = k;
+    } else if (is Class<Object> m=modelType) {
+        clazz = m;
+    } else {
+        clazz = nothing;
+    }
+    return clazz;
+}
 
 "Given a Type reflecting an Iterable, returns a Type reflecting the 
  iterated type or returns null if the given Type does not reflect an Iterable"
@@ -375,7 +375,7 @@ Type<Anything> iteratedType(Type<Anything> containerType) {
 
 "Figure out the type of the attribute of the given name that's a member of
  modelType or jsonType"
-Type<> attributeType(Type<> modelType, Type<> jsonType, String attributeName) {
+Attribute? attributeType(Type<> modelType, Type<> jsonType, String attributeName) {
     Type<> type;
     if (!jsonType.exactly(`Nothing`)) {
         type = jsonType;
@@ -388,7 +388,6 @@ Type<> attributeType(Type<> modelType, Type<> jsonType, String attributeName) {
     // we know that object can't be null
     Type<> qualifierType = eliminateNull(type);
     ////print("attributeType(``modelType``, ``jsonType``, ``attributeName``): qualifierType: ``qualifierType``");
-    Type<> result;
     if (is ClassOrInterface<> qualifierType) {
         // We want to do qualifierType.getAttribute(), but we have to do it with runtime types
         // not compile time types, so we have to do go via the metamodel.
@@ -396,12 +395,10 @@ Type<> attributeType(Type<> modelType, Type<> jsonType, String attributeName) {
         //assert(is Attribute<Nothing, Anything, Nothing> r);
         //result = r.type;
         assert(exists a = qualifierType.getAttribute<Nothing,Anything,Nothing>(attributeName));
-        return a.type;
+        return a;
     } else {
-        result = `Nothing`;
+        return null;
     }
-    //print("attributeType(``modelType``, ``jsonType``, ``attributeName``): result: ``result``");
-    return result;
 }
 
 

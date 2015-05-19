@@ -23,7 +23,7 @@ import ceylon.collection {
     ArrayList,
     HashMap
 }
-
+/*
 
 "A contract for building instances from JSON objects."
 interface ObjectBuilder {
@@ -395,4 +395,4 @@ shared void runOld() {
         d.add(DeserializationResult(stw.read, x));
     }
     statDeser(d);
-}
+}*/

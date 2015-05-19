@@ -30,7 +30,7 @@ shared interface Memberizer {
 
 "Treats all constructor parameters of [[serializeMembers.c]] as members of 
  the JSON hash, thus permitting construction via (named argument) instantiation"
-see(`class NamedInvocation`)
+//see(`class NamedInvocation`)
 shared object namedParameterMemberizer satisfies Memberizer {
         
     shared actual void serializeMembers(ClassSerialization cs, Class<Object> c, 
@@ -56,7 +56,7 @@ shared object namedParameterMemberizer satisfies Memberizer {
 
 "Treats all `variable` or `late` attributes of the instance as members, thus 
  requiring a nullary class initializer or constructor for deserialization."
-see(`class NullaryInvocationAndInjection`)
+//see(`class NullaryInvocationAndInjection`)
 shared object variableOrLateMemberizer satisfies Memberizer {
     shared actual void serializeMembers(ClassSerialization cs, Class<Object> c, 
         Object instance, Member serializer) {

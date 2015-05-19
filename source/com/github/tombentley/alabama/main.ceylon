@@ -6,7 +6,7 @@ import ceylon.json {
 import ceylon.json.stream {
     StreamParser
 }
-
+/*
 Factura crear() {
   return Factura {
     numero=666;
@@ -250,3 +250,4 @@ shared void run2() {
   }
   statDeser(d);
 }
+*/
