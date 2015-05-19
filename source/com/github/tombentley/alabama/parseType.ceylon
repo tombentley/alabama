@@ -185,47 +185,47 @@ class TypeParser(String input) {
     value tokenizer = Tokenizer(input);
     
     """input ::= intersectionType ;"""
-    shared Type parse() {
+    shared Type<> parse() {
         value result = intersectionType();
         tokenizer.expect(dtEoi);
         return result;
     }
     
     """intersectionType ::= unionType ('&' intersectionType) ;"""
-    Type intersectionType() {
-        variable Type result = unionType();
+    Type<> intersectionType() {
+        variable Type<> result = unionType();
         if (tokenizer.isType(dtAnd)) {
-            Type u2 = unionType();
+            Type<> u2 = unionType();
             result = result.intersection(u2);
         }
         return result;
     }
     
     """unionType ::= simpleType ('|' intersectionType) ;"""
-    Type unionType() {
-        variable Type result = simpleType();
+    Type<> unionType() {
+        variable Type<> result = simpleType();
         if (tokenizer.isType(dtOr)) {
-            Type u2 = intersectionType();
+            Type<> u2 = intersectionType();
             result = result.union(u2);
         }
         return result;
     }
     
     """simpleType ::= declaration typeArguments? ('.' typeName typeArguments?)* ;"""
-    Type simpleType() {
+    Type<> simpleType() {
         value d = declaration();
-        Type[] ta;
+        Type<>[] ta;
         if (tokenizer.current.type == dtLt) {
             ta = typeArguments();
         } else {
             ta = [];
         }
         if (is ClassOrInterfaceDeclaration d) {
-            variable ClassOrInterface x = d.apply<Anything>(*ta);
+            variable ClassOrInterface<> x = d.apply<Anything>(*ta);
             while (tokenizer.isType(dtDot)) {
                 value mt = typeName();
                 value mta = typeArguments();
-                assert(is ClassModel|InterfaceModel k = x.getClassOrInterface(mt, *mta));
+                assert(is ClassModel<>|InterfaceModel<> k = x.getClassOrInterface(mt, *mta));
                 x = k;
             }
             return x;
@@ -254,9 +254,9 @@ class TypeParser(String input) {
     }
     
     """typeArgments := '<' intersectionType (',' intersectionType)* '>';"""
-    Type[] typeArguments() {
+    Type<>[] typeArguments() {
         tokenizer.expect(dtLt);
-        variable Type[] result = [];
+        variable Type<>[] result = [];
         while(true) {
             value t = intersectionType();
             result = result.withTrailing(t);
@@ -318,7 +318,7 @@ class TypeParser(String input) {
     }
 }
 
-shared Type parseType(String t) => TypeParser(t).parse();
+shared Type<> parseType(String t) => TypeParser(t).parse();
 
 
 
@@ -339,7 +339,7 @@ class ModelParser() {
     value modulesList = modules.list;
     
     """input ::= intersectionType ;"""
-    shared Model|Type|ConstructorModel parse(String input) {
+    shared Model|Type<>|ConstructorModel<> parse(String input) {
         value tokenizer = Tokenizer(input);
         value result = intersectionModel(tokenizer);
         tokenizer.expect(dtEoi);
@@ -347,38 +347,38 @@ class ModelParser() {
     }
     
     """intersectionType ::= unionType ('&' intersectionType) ;"""
-    Model|Type|ConstructorModel intersectionModel(Tokenizer tokenizer) {
+    Model|Type<>|ConstructorModel<> intersectionModel(Tokenizer tokenizer) {
         variable value result = unionModel(tokenizer);
         if (tokenizer.isType(dtAnd)) {
-            assert(is Type u1=result);
-            assert(is Type u2 = unionModel(tokenizer));
+            assert(is Type<> u1=result);
+            assert(is Type<> u2 = unionModel(tokenizer));
             result = u1.intersection(u2);
         }
         return result;
     }
     
     """unionType ::= simpleType ('|' intersectionType) ;"""
-    Model|Type|ConstructorModel unionModel(Tokenizer tokenizer) {
+    Model|Type<>|ConstructorModel<> unionModel(Tokenizer tokenizer) {
         variable value result = qualifiedModel(tokenizer);
         if (tokenizer.isType(dtOr)) {
-            assert(is Type u1=result);
-            assert(is Type u2 = intersectionModel(tokenizer));
+            assert(is Type<> u1=result);
+            assert(is Type<> u2 = intersectionModel(tokenizer));
             result = u1.union(u2);
         }
         return result;
     }
     
     """qualifiedModel ::= qualifiedDeclaration typeArguments? ('.' declarationName  typeArguments?)* ;"""
-    Model|Type|ConstructorModel qualifiedModel(Tokenizer tokenizer) {
+    Model|Type<>|ConstructorModel<> qualifiedModel(Tokenizer tokenizer) {
         value d = declaration(tokenizer);
         Type[]? ta = typeArguments(tokenizer);
         if (is ClassOrInterfaceDeclaration d) {
-            variable Model|Type|ConstructorModel result = d.apply<Anything>(*(ta else []));
+            variable Model|Type<>|ConstructorModel<> result = d.apply<Anything>(*(ta else []));
             while (tokenizer.isType(dtDot)) {
                 value m = declarationName(tokenizer);
                 value mta = typeArguments(tokenizer);
-                if (is ClassOrInterface container=result) {
-                    if (is ClassOrInterface c = container.getClassOrInterface(m, *(mta else []))) {
+                if (is ClassOrInterface<> container=result) {
+                    if (is ClassOrInterface<> c = container.getClassOrInterface(m, *(mta else []))) {
                         result = c;
                     } else if (exists f=container.getMethod<Nothing,Anything,Nothing>(m, *(mta else []))) {
                         assert(tokenizer.isType(dtEoi));
@@ -388,7 +388,7 @@ class ModelParser() {
                         assert(! mta exists);
                         assert(tokenizer.isType(dtEoi));
                         result = a;
-                    } else if (is Class c=container,
+                    } else if (is Class<> c=container,
                         exists ct=c.getConstructor(m)) {
                         "constructor cannot have type arguments"
                         assert(! mta exists);
@@ -402,7 +402,7 @@ class ModelParser() {
             }
             return result;
         } else if (is FunctionDeclaration d){
-            variable Function x = d.apply<Anything>(*(ta else []));
+            variable Function<> x = d.apply<Anything>(*(ta else []));
             return x;
         } else if (is ValueDeclaration d){
             "value cannot have type arguments"
@@ -443,13 +443,13 @@ class ModelParser() {
     }
     
     """typeArgments := '<' intersectionType (',' intersectionType)* '>';"""
-    Type[]? typeArguments(Tokenizer tokenizer) {
+    Type<>[]? typeArguments(Tokenizer tokenizer) {
         if (tokenizer.isType(dtLt)) {
-            assert(is Type t1 = intersectionModel(tokenizer));
-            variable Type[] result = [t1];
+            assert(is Type<> t1 = intersectionModel(tokenizer));
+            variable Type<>[] result = [t1];
             while(tokenizer.isType(dtComma)) {
                 value t2 = intersectionModel(tokenizer);
-                assert(is Type t2);
+                assert(is Type<> t2);
                 result = result.withTrailing(t2);
             }
             tokenizer.expect(dtGt);
@@ -496,7 +496,7 @@ class ModelParser() {
     }
 }
 
-Model|Type|ConstructorModel parseModel(String t) => ModelParser().parse(t);
+Model|Type<>|ConstructorModel<> parseModel(String t) => ModelParser().parse(t);
 
 shared void testParseModel() {
     assert(`String` == parseModel("ceylon.language::String"));

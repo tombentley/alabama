@@ -1,23 +1,22 @@
-import ceylon.language.meta {
-    type
-}
-import ceylon.language.meta.model {
-    Class,
-    Type,
-    Attribute,
-    Constructor
-}
-import ceylon.language.meta.declaration {
-    ValueDeclaration,
-    ConstructorDeclaration,
-    ClassDeclaration
-}
 import ceylon.collection {
     HashMap
 }
 import ceylon.json {
     Visitor,
     StringEmitter
+}
+import ceylon.language.meta {
+    type
+}
+import ceylon.language.meta.declaration {
+    ValueDeclaration,
+    ConstructorDeclaration,
+    ClassDeclaration
+}
+import ceylon.language.meta.model {
+    Class,
+    Type,
+    Attribute
 }
 
 "Figures out what the members of the JSON hash should be, and calls back on 
@@ -69,7 +68,7 @@ shared object variableOrLateMemberizer satisfies Memberizer {
                 value x = `function ValueDeclaration.memberApply`.memberInvoke(ad, [c], c);
                 assert(exists x);
                 value y = `value Attribute.type`.memberGet(x);
-                assert(is Type y);
+                assert(is Type<> y);
                 serializer.member(ad.name, y, ad.memberGet(instance));
             }
         }
@@ -77,12 +76,12 @@ shared object variableOrLateMemberizer satisfies Memberizer {
 }
 
 shared interface Member {
-    shared formal void member(String name, Type modelType, Anything instance);
+    shared formal void member(String name, Type<> modelType, Anything instance);
 }
 
 
 interface TypeHinter {
-    shared formal void hint(Type type, Visitor visitor);
+    shared formal void hint(Type<> type, Visitor visitor);
 }
 
 class WrapperObjectTypeHinter(PropertyTypeHint property) satisfies TypeHinter {
@@ -104,7 +103,7 @@ class WrapperArrayTypeHinter(TypeNaming typeNaming) satisfies TypeHinter {
     }
 }
 class PropertyTypeHinter(PropertyTypeHint property) satisfies TypeHinter {
-    shared actual void hint(Type type, Visitor visitor) {
+    shared actual void hint(Type<> type, Visitor visitor) {
         visitor.onKey(property.property);
         visitor.onString(property.naming.name(type));
     }
@@ -148,13 +147,13 @@ shared class Serializer() satisfies Member{
         return cs;
     }
     
-    Type? typeInfo() {
+    Type<>? typeInfo() {
         // TODO
         // if the actual type is different from the model type
         return null;
     }
     
-    void arr(Type modelType, {Anything*} instance) {
+    void arr(Type<> modelType, {Anything*} instance) {
         value it = iteratedType(modelType);
         visitor.onStartArray();
         for (Anything r in instance) {
@@ -163,7 +162,7 @@ shared class Serializer() satisfies Member{
         visitor.onEndArray();
     }
     
-    void obj(Type modelType, Object instance) {
+    void obj(Type<> modelType, Object instance) {
         visitor.onStartObject();
         assert(is Class<Object> c = type(instance));
         value m = model(c);
@@ -176,7 +175,7 @@ shared class Serializer() satisfies Member{
         val(modelType, instance);
     }
     
-    void val(Type modelType, Anything instance) {
+    void val(Type<> modelType, Anything instance) {
         if (!exists instance) {
             visitor.onNull();
         } else if (is Integer|Float instance) {
@@ -193,7 +192,7 @@ shared class Serializer() satisfies Member{
     }
     
     "Serialize the given [[instance]] as events on the given [[visitor]]."
-    shared void serialize(Visitor visitor, Anything instance, Type modelType=type(instance)) {
+    shared void serialize(Visitor visitor, Anything instance, Type<> modelType=type(instance)) {
         this.visitor = visitor;
         val(modelType, instance);
     }

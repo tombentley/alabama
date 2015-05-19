@@ -3,23 +3,8 @@ import ceylon.collection {
     HashMap
 }
 import ceylon.json {
-    StringTokenizer, Positioned
-}
-import ceylon.language.meta {
-    typeLiteral,
-    type
-}
-import ceylon.language.meta.model {
-    Class,
-    Value,
-    Interface,
-    UnionType,
-    IntersectionType,
-    Type,
-    ClassOrInterface,
-    InterfaceModel,
-    Attribute,
-    ClassModel
+    StringTokenizer,
+    Positioned
 }
 import ceylon.json.stream {
     ArrayStartEvent,
@@ -30,236 +15,126 @@ import ceylon.json.stream {
     StreamParser,
     BasicEvent
 }
+import ceylon.language.meta {
+    type
+}
 import ceylon.language.meta.declaration {
-    Package,
-    ClassDeclaration,
     ValueDeclaration
 }
+import ceylon.language.meta.model {
+    Class,
+    Interface,
+    UnionType,
+    Type,
+    ClassOrInterface,
+    ClassModel
+}
 import ceylon.language.serialization {
-    DeserializationContext
+    DeserializationContext,
+    deser=deserialization
 }
 
 abstract class None() of none{}
 object none extends None() {}
-class PeekIterator<T>(Iterator<T>&Positioned iterator) satisfies Iterator<T>&Positioned{
-    variable T|Finished|None peeked = none;
-    shared T|Finished peek {
-        if (!is None p=peeked) {
-            return p;
-        } else {
-            return peeked = iterator.next();
-        }
-    }
-    shared actual T|Finished next() {
-        if (!is None p=peeked) {
-            peeked = none;
-            return p;
-        } else {
-            return iterator.next();
-        }
-    }
-    shared actual Integer column => iterator.column;
-    
-    shared actual Integer line => iterator.line;
-    
-    shared actual Integer position => iterator.position;
-    // TODO
-}
-
-"A contract for building instances from JSON objects."
-interface ObjectBuilder {
-    shared formal void bindAttribute(String attributeName, Anything attributeValue);
-    shared formal Object instantiate();
-}
-
-"An [[ObjectBuilder]] which instantiates using named arguments."
-class NamedInvocation(Type modelHint, Type keyHint) satisfies ObjectBuilder {
-    Class<Object> clazz;// TODO use hints to figure out an instantiable class
-    if (is Class<Object> k=keyHint) {
-        clazz = k;
-    } else if (is Class<Object> m=modelHint) {
-        clazz = m;
-    } else {
-        clazz = nothing;
-    }
-    
-    // TODO support constructors too
-    ArrayList<String->Anything> bindings = ArrayList<String->Anything>();
-    
-    shared actual void bindAttribute(String attributeName, Anything attributeValue) {
-        //print("bindAttribute(``attributeName``,``attributeValue else "null"``)");
-        bindings.add(attributeName->attributeValue);
-    }
-    shared actual Object instantiate() {
-        //print("instantiate(modelHint=``modelHint``, keyHint=``keyHint``)");
-        return clazz.namedApply(bindings);
-    }
-}
-
-"An [[ObjectBuilder]] which instantiates using a nullary constructor,
- and then sets attributes. This requires either defaulted variable attributes 
- or late attributes (or no attributes)."
-class NullaryInvocationAndInjection(Type modelHint, Type keyHint) satisfies ObjectBuilder {
-    
-    Class<Object,[]> c;// TODO use hints to figure out an instantiable class
-    if (is Class<Object,[]> k=keyHint) {
-        c = k;
-    } else if (is Class<Object,[]> k=modelHint) {
-        c = k;
-    } else {
-        throw Exception("Unable to instantiate ``modelHint``, ``keyHint``");
-    }
-    ArrayList<String->Anything> bindings = ArrayList<String->Anything>();
-    
-    shared actual void bindAttribute(String attributeName, Anything attributeValue) {
-        //print("bindAttribute(``attributeName``,``attributeValue else "null"`` (type=``type(attributeValue)``)");
-        bindings.add(attributeName->attributeValue);
-    }
-    shared actual Object instantiate() {
-        //print("instantiate(modelHint=``modelHint``, keyHint=``keyHint``)");
-        
-        value instance = c();
-        for (name->attributeValue in bindings) {
-            if (exists attribute = c.getAttribute<Nothing,Anything>(name)) {
-                value v = attribute.bind(instance);
-                v.setIfAssignable(attributeValue);
-            } else {
-                throw Exception("Class ``c`` lacks attribute ``name``.");
-            }
-        }
-        return instance;
-    }
-}
 
 
-/*
- [
- { "@id": 1,
-   "name": "rod"
-   "@children": [2, 3]
- },
- { "@id": 2,
-   "name": "tom",
-   "@father": 1
- },
- { "@id": 3,
-   "name": "ruth",
-   "@father": 1
- }
- ]
- */
-
-class S11nBuilderFactory(DeserializationContext<Integer> dc) {
-    variable Integer id = 0;
-    shared S11nBuilder obtainBuilder(Type<Anything> modelHint, Type<Anything> keyHint) {
-        // TODO use hints to figure out an instantiable class
-        Class<Object> clazz;
-        if (is Class<Object> keyHint) {
-            clazz = keyHint;
-        } else if (is Class<Object> modelHint) {
-            clazz = modelHint;
-        } else {
-            throw Exception("Unable to instantiate ``modelHint``, ``keyHint``");
-        }
-        id++;
-        return S11nBuilder(dc, clazz, id);
-    }
-}
-
-class S11nBuilder(DeserializationContext<Integer> dc, clazz, id) satisfies ObjectBuilder {
+class S11nBuilder<Id>(DeserializationContext<Id> dc, clazz, id) 
+        given Id satisfies Object{
     
     ClassModel<Object> clazz;
-    Integer id;
+    Id id;
     
-    shared actual void bindAttribute(String attributeName, Anything attributeValue) {
-        assert(exists attr = clazz.getAttribute(attributeName)); 
+    shared void bindAttribute(String attributeName, Id attributeValue) {
+        //print("bindAttribute(``attributeName``, ``attributeValue``) ``clazz``");
+        assert(exists attr = clazz.getAttribute<Nothing,Anything>(attributeName)); 
         ValueDeclaration vd = attr.declaration;
         if (attributeName.startsWith("@")) {
-            assert(is Integer attributeValue);
             dc.attribute(id, vd, attributeValue);
         } else {
             // XXX I can't do this, because instantiate will have returned 
-            // an actual instance
-            // and I need it's ID
-            dc.attribute(id, vd, id+1);
+            // an actual instance and I need it's ID
+            dc.attribute(id, vd, attributeValue);
         }
     }
     
-    shared actual Object instantiate() {
+    shared Id instantiate() {
         dc.instance(id, clazz);
-        return dc.reconstruct(id);
+        return id;
     }
     
 }
 
 "A contract for building collection-like things from JSON arrays."
-interface ContainerBuilder {
-    shared formal void addElement(Anything element);
-    shared formal Object instantiate(
+interface S11nContainerBuilder<Id> {
+    shared formal void addElement(Type<> et, Id element);
+    shared formal Id instantiate(
         "A hint at the type originating from the metamodel"
-        Type modelHint);
+        Type<> modelHint);
 }
 
-"A [[ContainerBuilder]] for building [[Sequence]]s and [[Sequential]]s."
-class SequenceBuilder() satisfies ContainerBuilder {
-    value sequenceType = typeLiteral<[Anything+]>();
-    ArrayList<Anything> elements = ArrayList<Anything>(); 
+class S11nSequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
+        satisfies S11nContainerBuilder<Id> {
+    Id id;
+    ArrayList<Id> elements = ArrayList<Id>(); 
     variable Type<Anything> elementType = `Nothing`;
-    shared actual void addElement(Anything element) {
+    shared actual void addElement(Type<> et, Id element) {
         elements.add(element);
-        elementType = type(element).union(elementType);
+        elementType = et.union(elementType);
     }
-    shared actual Object instantiate(
+    shared actual Id instantiate(
         "A hint at the type originating from the metamodel"
-        Type modelHint) {
-        if (modelHint.subtypeOf(sequenceType)) {
-            variable value narrowed = `function Sequence.narrow`.memberInvoke(elements, [elementType]) else [];
-            //narrowed = `function Iterable.sequence`.memberInvoke(narrowed) else [];
-            assert(is Object seq = `function sequence`.invoke([elementType, `Null`], narrowed));
-            return seq;
+        Type<> modelHint) {
+        //dc.instanceValue(id, elements.sequence());
+        if (elements.empty) {
+            dc.instanceValue(id, empty);
         } else {
-            value narrowed = `function Sequence.narrow`.memberInvoke(elements, [elementType]) else [];
-            assert(is {Anything*} narrowed);
-            //Anything[] result = sequence<Element>(elements.narrow<Element>()) else [];
-            assert(is Object result = `function sequence`.invoke([elementType], narrowed));
-            return result;
+            Id arrayId = nextId();
+            dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(elementType));
+            Id sizeId = nextId();
+            dc.instanceValue(sizeId, elements.size);
+            dc.attribute(arrayId, `value Array.size`, sizeId);
+            variable value index = 0;
+            for (e in elements) {
+                dc.element(arrayId, index, e);
+                index++;
+            }
+            
+            dc.instance(id, `class ArraySequence`.classApply<Anything,Nothing>(elementType));
+            
+            dc.attribute(id, `class ArraySequence`.getDeclaredMemberDeclaration<ValueDeclaration>("array") else nothing, arrayId);
+            
         }
+        return id;
     }
 }
 
 "A [[ContainerBuilder]] for building [[Array]]s"
-class ArrayBuilder() satisfies ContainerBuilder {
-    ArrayList<Anything> elements = ArrayList<Anything>();
+class S11nArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) satisfies S11nContainerBuilder<Id> {
+    ClassModel<Object> clazz;
+    Id id;
+    variable Integer index = 0;
     variable Type<Anything> elementType = `Nothing`;
-    shared actual void addElement(Anything element) {
-        elements.add(element);
+    shared actual void addElement(Type<> et, Id element) {
+        dc.element(id, index++, element);
         elementType = type(element).union(elementType);
     }
-    shared actual Object instantiate(
+    shared actual Id instantiate(
         "A hint at the type originating from the metamodel"
-        Type modelHint) {
-        value narrowed = `function Sequence.narrow`.invoke([elementType]) else [];
-        assert(exists result = `class Array`.instantiate([elementType], narrowed));
-        return result;
+        Type<> modelHint) {
+        dc.instance(id, clazz);
+        return id;
     }
 }
-/*class TupleBuilder() satisfies ContainerBuilder {
-    ArrayList elements
-    shared actual void addElement(Anything element) {
-        
+
+shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? typeHinting) {
+    
+    value dc = deser<Integer>();
+    variable value id = 0;
+    Integer nextId() {
+        value n = id;
+        id++;
+        return n;
     }
-    shared actual T instantiate<T>(
-        "A hint at the type originating from the metamodel"
-        Type<T> modelHint,
-        "A hint at the type originating from the serialized data" 
-        Type<T>? keyHint);
-}*/
-
-
-
-
-
-shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? typeHinting) {
     
     variable PeekIterator<BasicEvent>? input = null;
     PeekIterator<BasicEvent> stream {
@@ -269,12 +144,11 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
     
     shared Instance deserialize(Iterator<BasicEvent>&Positioned input) {
         this.input = PeekIterator(input);
-        assert(is Instance result = val(clazz));
-        return result;
+        return dc.reconstruct<Instance>(val(clazz));
     }
     
     "Peek at the next event in the stream and return the instance for it"
-    Anything val(Type modelType) {
+    Integer val(Type<> modelType) {
         //print("val(modelType=``modelType``)");
         switch (item=stream.peek)
         case (is ObjectStartEvent) {
@@ -286,41 +160,51 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
         }
         case (is String) {
             stream.next();
-            if (is Class<String>|Type<Nothing> a=modelType) {
+            if (modelType.subtypeOf(`String|Null`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                return item;
+                value n = nextId();
+                dc.instanceValue(n, item);
+                return n;
             }
-            throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
+            throw Exception("JSON value \"``item``\" cannot be coerced to ``modelType``");
         }
         case (is Integer) {
             stream.next();
-            if (is Class<Integer>|Type<Nothing> a=modelType) {
+            if (modelType.subtypeOf(`Integer|Null`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                return item;
+                value n = nextId();
+                dc.instanceValue(n, item);
+                return n;
             }
             throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
         }
         case (is Float) {
             stream.next();
-            if (is Class<Float>|Type<Nothing> a=modelType) {
+            if (modelType.subtypeOf(`Float|Null`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                return item;
+                value n = nextId();
+                dc.instanceValue(n, item);
+                return n;
             }
             throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
         }
         case (is Boolean) {
             stream.next();
-            if (is Class<Boolean>|Type<Nothing> a=modelType) {
+            if (modelType.subtypeOf(`Boolean|Null`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                return item;
+                value n = nextId();
+                dc.instanceValue(n, item);
+                return n;
             }
             throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
         }
         case (is Null) {
             stream.next();
-            if (is Class<Boolean>|Type<Nothing> a=modelType) {
+            if (modelType.subtypeOf(`Null`)) {
                 //print("val(modelType=``modelType``): null");
-                return item;
+                value n = nextId();
+                dc.instanceValue(n, item);
+                return n;
             }
             throw Exception("JSON value null cannot be coerced to ``modelType``");
         }
@@ -329,14 +213,18 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
         }
     }
     
-    Anything arr(Type modelType) {
+    Integer arr(Type<> modelType) {
         //print("arr(modelType=``modelType``)");
         assert(stream.next() is ArrayStartEvent);// consume initial {
-        ContainerBuilder builder = SequenceBuilder();
+        // not a SequenceBuilder, something else
+        //print(modelType);
+        //assert(is ClassOrInterface<Object> modelType);
+        S11nSequenceBuilder<Integer> builder = S11nSequenceBuilder<Integer>(dc, nextId(), nextId);
+        //ArrayBuilder2<Integer> builder = ArrayBuilder2<Integer>(dc, `Array<String>`, nextId());
         while (true) {
             switch(item=stream.peek)
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
-                builder.addElement(val(iteratedType(modelType)));
+                builder.addElement(iteratedType(modelType), val(iteratedType(modelType)));
             }
             case (is ArrayEndEvent) {
                 stream.next();// consume ]
@@ -351,18 +239,24 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
         }
     }
     
-    function obtainBuilder(Type modelType, Type keyType) {
-        //ObjectBuilder builder = NamedInvocation();// TODO reuse a single instance?
-        //ObjectBuilder builder = NullaryInvocationAndInjection();// TODO reuse a single instance?
-        ObjectBuilder builder = S11nBuilder();// TODO reuse a single instance?
+    function obtainBuilder(Type<> modelType, Type<> keyType) {
+        Class<Object> clazz;// TODO use hints to figure out an instantiable class
+        if (is Class<Object> k=keyType) {
+            clazz = k;
+        } else if (is Class<Object> m=modelType) {
+            clazz = m;
+        } else {
+            clazz = nothing;
+        }
+        S11nBuilder<Integer> builder = S11nBuilder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
         return builder;
     }
     
     "Consume the next object from the [[stream]] and return the instance for it"
-    Anything obj(Type modelType) {
+    Integer obj(Type<> modelType) {
         //print("obj(modelType=``modelType``)");
         assert(stream.next() is ObjectStartEvent);// consume initial {
-        Type dataType;
+        Type<> dataType;
         if (is PropertyTypeHint typeHinting) {
             // We ought to use any @type information we can obtain 
             // from the JSON object to inform the type we figure out for this attribute
@@ -387,8 +281,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
         }
         value m = eliminateNull(modelType);
         value d = eliminateNull(dataType);
-        ObjectBuilder builder = obtainBuilder(m, d);
-        builder.startObject(m, d);
+        value builder = obtainBuilder(m, d);
         variable String? attributeName = null;
         while(true) {
             switch (item = stream.peek)
@@ -419,66 +312,51 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
                 attributeName = item.eventValue;
             }
             case (is String|Integer|Float|Boolean|Null) {
-                stream.next();// consume what we peeked
                 assert(exists a=attributeName);
-                builder.bindAttribute(a, item);
+                builder.bindAttribute(a, val(attributeType(modelType, dataType, a)));
                 attributeName = null;
             }
         }
     }
 }
 
-class Example() {
-    shared late Integer i;
-    shared actual String string => i.string;
-}
-
 shared void run() {
+    value deserializer = S11nDeserializer {
+        clazz = `S11nInvoice`;
+        typeHinting = PropertyTypeHint{
+            naming = LogicalTypeNaming(HashMap{
+                "Person" -> `S11nPerson`,
+                "Address" -> `S11nAddress`,
+                "Item" -> `S11nItem`,
+                "Product" -> `S11nProduct`,
+                "Invoice" -> `S11nInvoice`
+            });
+        }; 
+    };
+    variable value times = 1000;
+    variable value hs = 0;
+    for (i in 1..times) {
+        value x = deserializer.deserialize(StreamParser(StringTokenizer(exampleJson)));
+        //print(x);
+        hs+=x.hash; 
+    }
     print("press enter");
     process.readLine();
-    ////print(type(`Example.i`));
-    //`Example.i`(Example()).setIfAssignable(1);
-    variable value times = 10000;
-    value stw = Stopwatch();
-    variable value d = ArrayList<DeserializationResult>(times);
-    for (i in 0:times) {
-        stw.start();
-        value x = Deserializer {
-            clazz = `Invoice`;
-            typeHinting = PropertyTypeHint{
-                naming = LogicalTypeNaming(HashMap{
-                    "Person" -> `NullPerson`,
-                    "Address" -> `NullAddress`,
-                    "Item" -> `NullItem`,
-                    "Product" -> `NullProduct`,
-                    "Invoice" -> `NullInvoice`
-                });
-            }; 
-        }.deserialize(StreamParser(StringTokenizer(exampleJson)));
-        d.add(DeserializationResult(stw.read, x));
+    times = 4000;
+    value t0 = system.nanoseconds;
+    for (i in 1..times) {
+        value x = deserializer.deserialize(StreamParser(StringTokenizer(exampleJson)));
+        //print(x);
+       hs+=x.hash; 
     }
-    statDeser(d);
-    
-    times = 100;
-    d = ArrayList<DeserializationResult>(times);
-    for (i in 0:times) {
-        stw.start();
-        value x = Deserializer {
-            clazz = `Invoice`;
-            typeHinting = PropertyTypeHint{
-                naming = LogicalTypeNaming(HashMap{
-                    "Person" -> `NullPerson`,
-                    "Address" -> `NullAddress`,
-                    "Item" -> `NullItem`,
-                    "Product" -> `NullProduct`,
-                    "Invoice" -> `NullInvoice`
-                });
-            }; 
-        }.deserialize(StreamParser(StringTokenizer(exampleJson)));
-        d.add(DeserializationResult(stw.read, x));
-    }
-    statDeser(d);
+    value elapsed = (system.nanoseconds - t0)/1_000_000.0;
+    print("``elapsed``ms total");
+    print("``elapsed/times``ms per deserialization");
+    print(hs);
 }
+
+
+
 
 "Given a Type reflecting an Iterable, returns a Type reflecting the 
  iterated type or returns null if the given Type does not reflect an Iterable"
@@ -497,14 +375,21 @@ Type<Anything> iteratedType(Type<Anything> containerType) {
 
 "Figure out the type of the attribute of the given name that's a member of
  modelType or jsonType"
-Type attributeType(Type modelType, Type jsonType, String attributeName) {
-    variable Type type = modelType.union(jsonType);
+Type<> attributeType(Type<> modelType, Type<> jsonType, String attributeName) {
+    Type<> type;
+    if (!jsonType.exactly(`Nothing`)) {
+        type = jsonType;
+    } else if (is ClassOrInterface<> modelType) {
+        type = modelType;
+    } else {
+        type = modelType.union(jsonType);
+    }
     // since we know we're finding the type of an attribute on an object
     // we know that object can't be null
-    Type qualifierType = eliminateNull(type);
+    Type<> qualifierType = eliminateNull(type);
     ////print("attributeType(``modelType``, ``jsonType``, ``attributeName``): qualifierType: ``qualifierType``");
-    Type result;
-    if (is ClassOrInterface qualifierType) {
+    Type<> result;
+    if (is ClassOrInterface<> qualifierType) {
         // We want to do qualifierType.getAttribute(), but we have to do it with runtime types
         // not compile time types, so we have to do go via the metamodel.
         //value r = `function ClassOrInterface.getAttribute`.memberInvoke(qualifierType, [qualifierType, `Anything`, `Nothing`], attributeName);
@@ -520,8 +405,8 @@ Type attributeType(Type modelType, Type jsonType, String attributeName) {
 }
 
 
-Type eliminateNull(Type type) {
-    if (is UnionType type) {
+Type<> eliminateNull(Type<> type) {
+    if (is UnionType<> type) {
         if (type.caseTypes.size == 2,
             exists nullIndex=type.caseTypes.firstOccurrence(`Null`)) {
             assert(exists definite = type.caseTypes[1-nullIndex]);

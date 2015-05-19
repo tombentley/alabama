@@ -362,18 +362,18 @@ String exampleJson = """{
                           "items": [
                             {
                               "product": {
-                                "sku": "123",
-                                "description": "",
-                                "unitPrice": 3.45,
+                                "sku": "567",
+                                "description": "Honey",
+                                "unitPrice": 4.50,
                                 "salesTaxRate": 0.2
                               },
-                              "quantity": 1.0
+                              "quantity": 4.0
                             },
                             {
                               "product": {
                                 "sku": "123",
-                                "description": "",
-                                "unitPrice": 3.45,
+                                "description": "Picnic baskets",
+                                "unitPrice": 10.99,
                                 "salesTaxRate": 0.2
                               },
                               "quantity": 1.0
@@ -503,3 +503,82 @@ class NullaryConstructor {
 // TODO test ser, deser with enumerated types
 // TODO support and test "type inference" with enumerated types
 // TODO support ser, deser with wrapper objects and arrays
+
+
+
+
+
+
+
+
+
+
+"""Example of entities in "Ceylon style", using named constructor arguments"""
+serializable class S11nInvoice(bill, deliver, items) {
+    shared S11nPerson bill;
+    shared S11nPerson deliver;
+    shared [S11nItem+] items;
+    shared actual String string => "invoice to: ``bill``
+                                    deliver to: ``deliver``
+                                    items: ``"\n".join(items)``";
+}
+serializable class S11nPerson(name, address) {
+    shared String name;
+    shared S11nAddress address;
+    shared actual String string => "``name``
+                                    ``address``";
+}
+serializable class S11nAddress(lines, postCode) {
+    shared String[] lines;
+    shared String postCode;
+    shared actual String string => ",\n".join(lines) + postCode;
+}
+serializable class S11nItem(product, quantity) {
+    shared S11nProduct product;
+    shared Float quantity;
+    shared actual String string => "``product.sku``\t``product.description else ""`` @ £``product.unitPrice`` x ``quantity``";
+}
+serializable class S11nProduct(sku, description, unitPrice, salesTaxRate) {
+    shared String sku;
+    shared String? description;
+    shared Float unitPrice;
+    shared Float salesTaxRate;
+    
+}
+
+S11nInvoice s11nExample => S11nInvoice {
+    bill = S11nPerson {
+        name = "Mr Pig";
+        address = S11nAddress {
+            lines = ["3 Pigs House", "The Farm"];
+            postCode = "3PH";
+        };
+    };
+    deliver = S11nPerson {
+        name = "Mr Pig";
+        address = S11nAddress {
+            lines = ["3 Pigs House", "The Farm"];
+            postCode = "3PH";
+        };
+    };
+    items = [
+    S11nItem {
+        product = S11nProduct {
+            sku="123";
+            description = "Bag of sand";
+            unitPrice = 2.34;
+            salesTaxRate = 0.2;
+        };
+        quantity = 4.0;
+    },
+    S11nItem {
+        product = S11nProduct {
+            sku="876";
+            description = "Bag of cement";
+            unitPrice = 3.57;
+            salesTaxRate = 0.2;
+        };
+        quantity = 1.0;
+    }
+    ];
+};
