@@ -21,6 +21,7 @@ import ceylon.language.meta.model {
 import ceylon.json {
     Visitor
 }
+/*
 void visitGraph<Id>(GraphVisitor<Id> visitor){}
 
 interface GraphVisitor<Id> {
@@ -147,9 +148,9 @@ class JsonSerializingVisitor(Visitor visitor) satisfies GraphVisitor<Null> {
     shared actual void endArray(Null id, Object instance) {
         visitor.onEndArray();
     }
-}
+}*/
 
-interface Deser<Id> {
+/*interface Deser<Id> {
     """The given [[instanceId]] refers to an instance of the given class """
     shared formal void instance(Id instanceId, Class clazz);
 
@@ -173,14 +174,14 @@ interface Deser<Id> {
     """Get the instance with the given [[instanceId]] reconstructing it 
        if necessary."""
     shared formal Instance reconstruct<Instance>(Id instanceId);
-}
+}*/
 
 //abstract class None() of none {}
 //object none extends None() {
 //    shared actual String string ="none";
 //}
 
-"Holder of the state of partially initialized objects during deserialization.
+/*"Holder of the state of partially initialized objects during deserialization.
  
  After a Partial instance has been constructed it has its state specified as follows:
  
@@ -438,7 +439,7 @@ class DeserImpl<Id>() satisfies Deser<Id>
         
     }
 }
-
+*/
 
 /*
 interface Deser2 {

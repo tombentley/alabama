@@ -18,7 +18,8 @@ import ceylon.language.meta.model {
     Type,
     ClassOrInterface,
     InterfaceModel,
-    Attribute
+    Attribute,
+    ClassModel
 }
 import ceylon.json.stream {
     ArrayStartEvent,
@@ -33,6 +34,9 @@ import ceylon.language.meta.declaration {
     Package,
     ClassDeclaration,
     ValueDeclaration
+}
+import ceylon.language.serialization {
+    DeserializationContext
 }
 
 abstract class None() of none{}
@@ -65,55 +69,55 @@ class PeekIterator<T>(Iterator<T>&Positioned iterator) satisfies Iterator<T>&Pos
 "A contract for building instances from JSON objects."
 interface ObjectBuilder {
     shared formal void bindAttribute(String attributeName, Anything attributeValue);
-    shared formal Object instantiate(
-        "A hint at the type originating from the metamodel"
-        Type modelHint,
-        "A hint at the type originating from the serialized data" 
-        Type keyHint);
+    shared formal Object instantiate();
 }
 
 "An [[ObjectBuilder]] which instantiates using named arguments."
-class NamedInvocation() satisfies ObjectBuilder {
+class NamedInvocation(Type modelHint, Type keyHint) satisfies ObjectBuilder {
+    Class<Object> clazz;// TODO use hints to figure out an instantiable class
+    if (is Class<Object> k=keyHint) {
+        clazz = k;
+    } else if (is Class<Object> m=modelHint) {
+        clazz = m;
+    } else {
+        clazz = nothing;
+    }
+    
     // TODO support constructors too
     ArrayList<String->Anything> bindings = ArrayList<String->Anything>();
+    
     shared actual void bindAttribute(String attributeName, Anything attributeValue) {
         //print("bindAttribute(``attributeName``,``attributeValue else "null"``)");
         bindings.add(attributeName->attributeValue);
     }
-    shared actual Object instantiate(Type modelHint, Type keyHint) {
+    shared actual Object instantiate() {
         //print("instantiate(modelHint=``modelHint``, keyHint=``keyHint``)");
-        Class<Object> c;// TODO use hints to figure out an instantiable class
-        if (is Class<Object> keyHint) {
-            c = keyHint;
-        } else if (is Class<Object> modelHint) {
-            c = modelHint;
-        } else {
-            c = nothing;
-        }
-        return c.namedApply(bindings);
+        return clazz.namedApply(bindings);
     }
 }
 
 "An [[ObjectBuilder]] which instantiates using a nullary constructor,
  and then sets attributes. This requires either defaulted variable attributes 
  or late attributes (or no attributes)."
-class NullaryInvocationAndInjection() satisfies ObjectBuilder {
-    // TODO support constructors too
+class NullaryInvocationAndInjection(Type modelHint, Type keyHint) satisfies ObjectBuilder {
+    
+    Class<Object,[]> c;// TODO use hints to figure out an instantiable class
+    if (is Class<Object,[]> k=keyHint) {
+        c = k;
+    } else if (is Class<Object,[]> k=modelHint) {
+        c = k;
+    } else {
+        throw Exception("Unable to instantiate ``modelHint``, ``keyHint``");
+    }
     ArrayList<String->Anything> bindings = ArrayList<String->Anything>();
+    
     shared actual void bindAttribute(String attributeName, Anything attributeValue) {
         //print("bindAttribute(``attributeName``,``attributeValue else "null"`` (type=``type(attributeValue)``)");
         bindings.add(attributeName->attributeValue);
     }
-    shared actual Object instantiate(Type modelHint, Type keyHint) {
+    shared actual Object instantiate() {
         //print("instantiate(modelHint=``modelHint``, keyHint=``keyHint``)");
-        Class<Object,[]> c;// TODO use hints to figure out an instantiable class
-        if (is Class<Object,[]> keyHint) {
-            c = keyHint;
-        } else if (is Class<Object,[]> modelHint) {
-            c = modelHint;
-        } else {
-            throw Exception("Unable to instantiate ``modelHint``, ``keyHint``");
-        }
+        
         value instance = c();
         for (name->attributeValue in bindings) {
             if (exists attribute = c.getAttribute<Nothing,Anything>(name)) {
@@ -126,6 +130,8 @@ class NullaryInvocationAndInjection() satisfies ObjectBuilder {
         return instance;
     }
 }
+
+
 /*
  [
  { "@id": 1,
@@ -142,26 +148,44 @@ class NullaryInvocationAndInjection() satisfies ObjectBuilder {
  }
  ]
  */
-class S11nBuilder(Deser<Integer> dc) satisfies ObjectBuilder {
-    
+
+class S11nBuilderFactory(DeserializationContext<Integer> dc) {
     variable Integer id = 0;
-    
-    shared void startObject() {
+    shared S11nBuilder obtainBuilder(Type<Anything> modelHint, Type<Anything> keyHint) {
+        // TODO use hints to figure out an instantiable class
+        Class<Object> clazz;
+        if (is Class<Object> keyHint) {
+            clazz = keyHint;
+        } else if (is Class<Object> modelHint) {
+            clazz = modelHint;
+        } else {
+            throw Exception("Unable to instantiate ``modelHint``, ``keyHint``");
+        }
         id++;
+        return S11nBuilder(dc, clazz, id);
     }
+}
+
+class S11nBuilder(DeserializationContext<Integer> dc, clazz, id) satisfies ObjectBuilder {
+    
+    ClassModel<Object> clazz;
+    Integer id;
     
     shared actual void bindAttribute(String attributeName, Anything attributeValue) {
-        ValueDeclaration vd = lookup(attributeName);
+        assert(exists attr = clazz.getAttribute(attributeName)); 
+        ValueDeclaration vd = attr.declaration;
         if (attributeName.startsWith("@")) {
             assert(is Integer attributeValue);
             dc.attribute(id, vd, attributeValue);
         } else {
+            // XXX I can't do this, because instantiate will have returned 
+            // an actual instance
+            // and I need it's ID
             dc.attribute(id, vd, id+1);
         }
     }
     
-    shared actual Object instantiate(Type<Anything> modelHint, Type<Anything> keyHint) {
-        Class clazz = nothing;
+    shared actual Object instantiate() {
         dc.instance(id, clazz);
         return dc.reconstruct(id);
     }
@@ -230,6 +254,8 @@ class ArrayBuilder() satisfies ContainerBuilder {
         "A hint at the type originating from the serialized data" 
         Type<T>? keyHint);
 }*/
+
+
 
 
 
@@ -325,6 +351,13 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
         }
     }
     
+    function obtainBuilder(Type modelType, Type keyType) {
+        //ObjectBuilder builder = NamedInvocation();// TODO reuse a single instance?
+        //ObjectBuilder builder = NullaryInvocationAndInjection();// TODO reuse a single instance?
+        ObjectBuilder builder = S11nBuilder();// TODO reuse a single instance?
+        return builder;
+    }
+    
     "Consume the next object from the [[stream]] and return the instance for it"
     Anything obj(Type modelType) {
         //print("obj(modelType=``modelType``)");
@@ -352,8 +385,10 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
         } else {
             dataType = `Nothing`;
         }
-        ObjectBuilder builder = NamedInvocation();// TODO reuse a single instance?
-        //ObjectBuilder builder = NullaryInvocationAndInjection();// TODO reuse a single instance?
+        value m = eliminateNull(modelType);
+        value d = eliminateNull(dataType);
+        ObjectBuilder builder = obtainBuilder(m, d);
+        builder.startObject(m, d);
         variable String? attributeName = null;
         while(true) {
             switch (item = stream.peek)
@@ -364,7 +399,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? 
             }
             case (is ObjectEndEvent) {
                 stream.next();// consume what we peeked
-                return builder.instantiate(eliminateNull(modelType), eliminateNull(dataType));
+                return builder.instantiate();
             }
             case (is Finished) {
                 throw Exception("unexpected end of stream");
