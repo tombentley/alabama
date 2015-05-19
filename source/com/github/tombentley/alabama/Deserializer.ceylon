@@ -38,7 +38,7 @@ import ceylon.language.serialization {
 abstract class None() of none{}
 object none extends None() {}
 
-
+// XXX TODO I think this can be inlines into the Deserializer
 class S11nBuilder<Id>(DeserializationContext<Id> dc, clazz, id) 
         given Id satisfies Object {
     
@@ -77,10 +77,10 @@ class S11nSequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
         satisfies S11nContainerBuilder<Id> {
     Id id;
     ArrayList<Id> elements = ArrayList<Id>(); 
-    variable Type<Anything> elementType = `Nothing`;
-    shared actual void addElement(Type<> et, Id element) {
-        elements.add(element);
-        elementType = et.union(elementType);
+    variable Type<Anything> iteratedType = `Nothing`;
+    shared actual void addElement(Type<> elementType, Id elementId) {
+        elements.add(elementId);
+        iteratedType = elementType.union(iteratedType);
     }
     shared actual Id instantiate(
         "A hint at the type originating from the metamodel"
@@ -90,7 +90,7 @@ class S11nSequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
             dc.instanceValue(id, empty);
         } else {
             Id arrayId = nextId();
-            dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(elementType));
+            dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
             Id sizeId = nextId();
             dc.instanceValue(sizeId, elements.size);
             dc.attribute(arrayId, `value Array.size`, sizeId);
@@ -99,11 +99,15 @@ class S11nSequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
                 dc.element(arrayId, index, e);
                 index++;
             }
-            
-            dc.instance(id, `class ArraySequence`.classApply<Anything,Nothing>(elementType));
-            
+            // XXX very ugly loss of encapsulation here
+            // we have to build in knowledge of the members of ArraySequence
+            // we'd have to do the same thing to support Tuple etc.
+            // we really want to support factory methods, but those will
+            // require support from the SAPI so that arguments are fully constructed before
+            // use => toposort. But that would permit serialization of classes 
+            // which were not annotated serializable, which would be pretty neat.
+            dc.instance(id, `class ArraySequence`.classApply<Anything,Nothing>(iteratedType));
             dc.attribute(id, `class ArraySequence`.getDeclaredMemberDeclaration<ValueDeclaration>("array") else nothing, arrayId);
-            
         }
         return id;
     }
@@ -225,6 +229,7 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
         while (true) {
             switch(item=stream.peek)
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
+                // TODO val knows the type of the thing it's creating, so we should use that as the et
                 builder.addElement(iteratedType(modelType), val(iteratedType(modelType)));
             }
             case (is ArrayEndEvent) {
