@@ -39,7 +39,7 @@ abstract class None() of none{}
 object none extends None() {}
 
 // XXX TODO I think this can be inlines into the Deserializer
-class S11nBuilder<Id>(DeserializationContext<Id> dc, clazz, id) 
+class Builder<Id>(DeserializationContext<Id> dc, clazz, id) 
         given Id satisfies Object {
     
     ClassModel<Object> clazz;
@@ -66,15 +66,15 @@ class S11nBuilder<Id>(DeserializationContext<Id> dc, clazz, id)
 }
 
 "A contract for building collection-like things from JSON arrays."
-interface S11nContainerBuilder<Id> {
+interface ContainerBuilder<Id> {
     shared formal void addElement(Type<> et, Id element);
     shared formal Id instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint);
 }
 
-class S11nSequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
-        satisfies S11nContainerBuilder<Id> {
+class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
+        satisfies ContainerBuilder<Id> {
     Id id;
     ArrayList<Id> elements = ArrayList<Id>(); 
     variable Type<Anything> iteratedType = `Nothing`;
@@ -114,7 +114,7 @@ class S11nSequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
 }
 
 "A [[ContainerBuilder]] for building [[Array]]s"
-class S11nArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) satisfies S11nContainerBuilder<Id> {
+class ArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) satisfies ContainerBuilder<Id> {
     ClassModel<Object> clazz;
     Id id;
     variable Integer index = 0;
@@ -131,7 +131,8 @@ class S11nArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) satisfies S
     }
 }
 
-shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHint? typeHinting) {
+shared class Deserializer<out Instance>(Type<Instance> clazz, 
+    TypeNaming? typeNaming, String? typeProperty) {
     
     value dc = deser<Integer>();
     variable value id = 0;
@@ -224,7 +225,7 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
         // not a SequenceBuilder, something else
         //print(modelType);
         //assert(is ClassOrInterface<Object> modelType);
-        S11nSequenceBuilder<Integer> builder = S11nSequenceBuilder<Integer>(dc, nextId(), nextId);
+        SequenceBuilder<Integer> builder = SequenceBuilder<Integer>(dc, nextId(), nextId);
         //ArrayBuilder2<Integer> builder = ArrayBuilder2<Integer>(dc, `Array<String>`, nextId());
         while (true) {
             switch(item=stream.peek)
@@ -250,7 +251,7 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
         //print("obj(modelType=``modelType``)");
         assert(stream.next() is ObjectStartEvent);// consume initial {
         Type<> dataType;
-        if (is PropertyTypeHint typeHinting) {
+        if (exists typeNaming, exists typeProperty) {
             // We ought to use any @type information we can obtain 
             // from the JSON object to inform the type we figure out for this attribute
             // but that requires (in general) that we buffer events until we reach
@@ -259,12 +260,12 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
             // In practice we can ensure the serializer emits @type
             // as the first key, to keep such buffering to a minimum
             if (is KeyEvent k = stream.peek,
-                k.eventValue == typeHinting.property) {
+                k.eventValue == typeProperty) {
                 stream.next();//consume @type
                 if (is String typeName = stream.next()) {
-                    dataType = typeHinting.naming.type(typeName);
+                    dataType = typeNaming.type(typeName);
                 } else {
-                    throw Exception("Expected String value for ``typeHinting.property`` property at ``stream.location``");
+                    throw Exception("Expected String value for ``typeProperty`` property at ``stream.location``");
                 }
             } else {
                 dataType = `Nothing`;
@@ -273,7 +274,7 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
             dataType = `Nothing`;
         }
         Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
-        S11nBuilder<Integer> builder = S11nBuilder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
+        Builder<Integer> builder = Builder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
         
         variable Attribute<>? attribute = null;
         while(true) {
@@ -314,17 +315,16 @@ shared class S11nDeserializer<out Instance>(Type<Instance> clazz, PropertyTypeHi
 }
 
 shared void run() {
-    value deserializer = S11nDeserializer {
-        clazz = `S11nInvoice`;
-        typeHinting = PropertyTypeHint{
-            naming = LogicalTypeNaming(HashMap{
-                "Person" -> `S11nPerson`,
-                "Address" -> `S11nAddress`,
-                "Item" -> `S11nItem`,
-                "Product" -> `S11nProduct`,
-                "Invoice" -> `S11nInvoice`
+    value deserializer = Deserializer {
+        clazz = `Invoice`;
+        typeNaming = LogicalTypeNaming(HashMap{
+                "Person" -> `Person`,
+                "Address" -> `Address`,
+                "Item" -> `Item`,
+                "Product" -> `Product`,
+                "Invoice" -> `Invoice`
             });
-        }; 
+        typeProperty = "class"; 
     };
     variable value times = 1000;
     variable value hs = 0;
@@ -399,8 +399,11 @@ Attribute? attributeType(Type<> modelType, Type<> jsonType, String attributeName
         //value r = `function ClassOrInterface.getAttribute`.memberInvoke(qualifierType, [qualifierType, `Anything`, `Nothing`], attributeName);
         //assert(is Attribute<Nothing, Anything, Nothing> r);
         //result = r.type;
-        assert(exists a = qualifierType.getAttribute<Nothing,Anything,Nothing>(attributeName));
-        return a;
+        if (exists a = qualifierType.getAttribute<Nothing,Anything,Nothing>(attributeName)) {
+            return a;
+        } else {
+            throw Exception("Couldn't find ``attributeName`` in ``qualifierType``");
+        }
     } else {
         return null;
     }

@@ -6,204 +6,9 @@ import ceylon.test {
 import ceylon.language.meta.declaration {
     ValueDeclaration
 }
-
-""" Example using "JavaBean style" will a nullary class parameter list and `late` attributes.""" 
-class LateInvoice() {
-    shared late LatePerson bill;
-    shared late LatePerson deliver;
-    shared late [LateItem+] items;
-    shared actual String string => "bill: ``bill``.
-                                    deliver to: ``deliver``.
-                                    ``items``
-                                    ";
+import ceylon.language.serialization {
+    serialization
 }
-class LatePerson() {
-    shared late String name;
-    shared late LateAddress address;
-    shared actual String string => "``name```,
-                                    ``address``";
-}
-class LateAddress() {
-    shared late String[] lines;
-    shared late String postCode;
-    shared actual String string => "``lines```,
-                                    ``postCode``";
-}
-class LateItem() {
-    shared late LateProduct product;
-    shared late Float quantity;
-    shared actual String string => "``product```\t``quantity``";
-}
-class LateProduct() {
-    shared late String sku;
-    shared late String description;
-    shared late Float unitPrice;
-    shared late Float salesTaxRate;
-    shared actual String string => "``sku```\t``description``\t``unitPrice``\t``salesTaxRate``";
-}
-
-LateInvoice exampleLate {
-    value bagOfSand = LateProduct();
-    bagOfSand.sku = "123";
-    bagOfSand.description = "Bag of sand";
-    bagOfSand.unitPrice = 2.34;
-    bagOfSand.salesTaxRate = 0.2;
-    value fourBagsOfSand = LateItem();
-    fourBagsOfSand.product = bagOfSand;
-    fourBagsOfSand.quantity = 4.0;
-    value bagOfCement = LateProduct();
-    bagOfCement.sku = "876";
-    bagOfCement.description = "Bag of cement";
-    bagOfCement.unitPrice = 3.57;
-    bagOfCement.salesTaxRate = 0.2;
-    value oneBagOfCement = LateItem();
-    oneBagOfCement.product = bagOfCement;
-    oneBagOfCement.quantity = 1.0;
-    
-    value mrPig = LatePerson();
-    mrPig.name = "Mr Pig";
-    mrPig.address = LateAddress();
-    mrPig.address.lines = ["3 Pigs House", "The Farm"];
-    mrPig.address.postCode = "3PH";
-    value invoice = LateInvoice();
-    invoice.deliver = mrPig;
-    invoice.bill = mrPig;
-    invoice.items = [fourBagsOfSand, oneBagOfCement];
-    
-    return invoice;
-}
-
-
-"""Example using "JavaBean style" with variable nullable attributes."""
-class NullInvoice() {
-    shared variable NullPerson? bill = null;
-    shared variable NullPerson? deliver = null;
-    shared variable [NullItem+]? items = null;
-    shared actual String string => "bill: ``bill else "null"``.
-                                    deliver to: ``deliver else "null"``.
-                                    ``items else "null"``
-                                    ";
-}
-class NullPerson() {
-    shared variable String? name = null;
-    shared variable NullAddress? address = null;
-    shared actual String string => "``name else "null"``,
-                                    ``address else "null"``";
-}
-class NullAddress() {
-    shared variable String[] lines = [];
-    shared variable String? postCode = null;
-    shared actual String string => "``lines``,
-                                    ``postCode else "null"``";
-}
-class NullItem() {
-    shared variable NullProduct? product = null;
-    shared variable Float? quantity = null;
-    shared actual String string => "``product else "null"```\t``quantity else "null"``";
-}
-class NullProduct() {
-    shared variable String? sku = null;
-    shared variable String? description = null;
-    shared variable Float? unitPrice = null;
-    shared variable Float? salesTaxRate = null;
-    shared actual String string => "``sku else "null"```\t``description else "null"``\t``unitPrice else "null"``\t``salesTaxRate else "null"``";
-}
-
-NullInvoice exampleNull {
-    value bagOfSand = NullProduct();
-    bagOfSand.sku = "123";
-    bagOfSand.description = "Bag of sand";
-    bagOfSand.unitPrice = 2.34;
-    bagOfSand.salesTaxRate = 0.2;
-    value fourBagsOfSand = NullItem();
-    fourBagsOfSand.product = bagOfSand;
-    fourBagsOfSand.quantity = 4.0;
-    value bagOfCement = NullProduct();
-    bagOfCement.sku = "876";
-    bagOfCement.description = "Bag of cement";
-    bagOfCement.unitPrice = 3.57;
-    bagOfCement.salesTaxRate = 0.2;
-    value oneBagOfCement = NullItem();
-    oneBagOfCement.product = bagOfCement;
-    oneBagOfCement.quantity = 1.0;
-    
-    value mrPig = NullPerson();
-    mrPig.name = "Mr Pig";
-    value mrPigAddress = NullAddress();
-    mrPigAddress.lines = ["3 Pigs House", "The Farm"];
-    mrPigAddress.postCode = "3PH";
-    mrPig.address = mrPigAddress;
-    value invoice = NullInvoice();
-    invoice.deliver = mrPig;
-    invoice.bill = mrPig;
-    invoice.items = [fourBagsOfSand, oneBagOfCement];
-    
-    return invoice;
-}
-
-
-
-"""Example of entities in "Ceylon style", using named constructor arguments"""
-class Invoice(bill, deliver, items) {
-    shared Person bill;
-    shared Person deliver;
-    shared [Item+] items;
-}
-class Person(name, address) {
-    shared String name;
-    shared Address address;
-}
-class Address(lines, postCode) {
-    shared String[] lines;
-    shared String postCode;
-}
-class Item(product, quantity) {
-    shared Product product;
-    shared Float quantity;
-}
-class Product(sku, description, unitPrice, salesTaxRate) {
-    shared String sku;
-    shared String? description;
-    shared Float unitPrice;
-    shared Float salesTaxRate;
-}
-
-Invoice example => Invoice {
-    bill = Person {
-        name = "Mr Pig";
-        address = Address {
-            lines = ["3 Pigs House", "The Farm"];
-            postCode = "3PH";
-        };
-    };
-    deliver = Person {
-        name = "Mr Pig";
-        address = Address {
-            lines = ["3 Pigs House", "The Farm"];
-            postCode = "3PH";
-        };
-    };
-    items = [
-    Item {
-        product = Product {
-            sku="123";
-            description = "Bag of sand";
-            unitPrice = 2.34;
-            salesTaxRate = 0.2;
-        };
-        quantity = 4.0;
-    },
-    Item {
-        product = Product {
-            sku="876";
-            description = "Bag of cement";
-            unitPrice = 3.57;
-            salesTaxRate = 0.2;
-        };
-        quantity = 1.0;
-    }
-    ];
-};
 
 test
 shared void serializeInvoice() {
@@ -249,100 +54,9 @@ shared void serializeInvoice() {
                       }
                      ]
                     }""", 
-    serialize(example, true));
+    serialize(exampleInvoice, true));
 }
-test
-shared void serializeNullInvoice() {
-    assertEquals(serialize(exampleNull, true),
-                 """{
-                     "bill": {
-                      "address": {
-                       "postCode": "3PH",
-                       "lines": [
-                        "3 Pigs House",
-                        "The Farm"
-                       ]
-                      },
-                      "name": "Mr Pig"
-                     },
-                     "items": [
-                      {
-                       "product": {
-                        "salesTaxRate": 0.2,
-                        "description": "Bag of sand",
-                        "unitPrice": 2.34,
-                        "sku": "123"
-                       },
-                       "quantity": 4.0
-                      },
-                      {
-                       "product": {
-                        "salesTaxRate": 0.2,
-                        "description": "Bag of cement",
-                        "unitPrice": 3.57,
-                        "sku": "876"
-                       },
-                       "quantity": 1.0
-                      }
-                     ],
-                     "deliver": {
-                      "address": {
-                       "postCode": "3PH",
-                       "lines": [
-                        "3 Pigs House",
-                        "The Farm"
-                       ]
-                      },
-                      "name": "Mr Pig"
-                     }
-                    }""");
-}
-test
-shared void serializeLateInvoice() {
-    assertEquals(serialize(exampleLate, true),
-                 """{
-                     "bill": {
-                      "address": {
-                       "postCode": "3PH",
-                       "lines": [
-                        "3 Pigs House",
-                        "The Farm"
-                       ]
-                      },
-                      "name": "Mr Pig"
-                     },
-                     "deliver": {
-                      "address": {
-                       "postCode": "3PH",
-                       "lines": [
-                        "3 Pigs House",
-                        "The Farm"
-                       ]
-                      },
-                      "name": "Mr Pig"
-                     },
-                     "items": [
-                      {
-                       "product": {
-                        "salesTaxRate": 0.2,
-                        "description": "Bag of sand",
-                        "unitPrice": 2.34,
-                        "sku": "123"
-                       },
-                       "quantity": 4.0
-                      },
-                      {
-                       "product": {
-                        "salesTaxRate": 0.2,
-                        "description": "Bag of cement",
-                        "unitPrice": 3.57,
-                        "sku": "876"
-                       },
-                       "quantity": 1.0
-                      }
-                     ]
-                    }""");
-}
+
 
 String exampleJson = """{ 
                           "bill": {
@@ -423,7 +137,8 @@ class AnnotationsExample6(bar) {
 
 test
 shared void readingAnnotations() {
-    variable value cs = readClass(`class AnnotationsExample`, namedParameterMemberizer);
+    value cfg = Config();
+    variable value cs = cfg.clazz(`class AnnotationsExample`);
     assert(`class AnnotationsExample` == cs.clazz);
     assert(["gee"] == cs.ignoredKeys);
     assert(`value AnnotationsExample.baz` in cs.omittedAttributes);
@@ -434,65 +149,110 @@ shared void readingAnnotations() {
     assert(b.key == "foo");
     
     try {
-        cs = readClass(`class AnnotationsExample2`, namedParameterMemberizer);
+        cs = cfg.clazz(`class AnnotationsExample2`);
         fail("excepted exception");
     } catch (AssertionError e) {
         assertEquals(e.message, """ignored keys cannot also be keys: foo""");
     }
     try {
-        cs = readClass(`class AnnotationsExample3`, namedParameterMemberizer);
+        cs = cfg.clazz(`class AnnotationsExample3`);
         fail("excepted exception");
     } catch (AssertionError e) {
         assertEquals(e.message, "ignored keys cannot also be keys: foo");
     }
     
-    cs = readClass(`class AnnotationsExample4`, namedParameterMemberizer);
+    cs = cfg.clazz(`class AnnotationsExample4`);
     assert(exists b3= cs.keys["bar"]);
     assert(exists b4= cs.keys["fooble"]);
     assert(b3===b4);
     assert(b3.attr == `value AnnotationsExample4.bar`);
     assert(b3.key == "bar");
     
-    cs = readClass(`class AnnotationsExample5`, namedParameterMemberizer);
-    cs = readClass(`class AnnotationsExample6`, namedParameterMemberizer);
+    cs = cfg.clazz(`class AnnotationsExample5`);
+    cs = cfg.clazz(`class AnnotationsExample6`);
 }
 
-class Generic<Element>(element) {
+test
+shared void serializeString() {
+    assertEquals(serialize("string"), """"string"""");
+}
+
+test
+shared void serializeCharacter() {
+    assertEquals(serialize('c'), """"c"""");
+    assertEquals(serialize<Object>('c'), """{"class":"ceylon.language::Character","value":"c"}""");
+}
+test
+shared void serializeInteger() {
+    assertEquals(serialize(42), """42""");
+}
+test
+shared void serializeFloat() {
+    assertEquals(serialize(42.0), """42.0""");
+}
+test
+shared void serializeBoolean() {
+    assertEquals(serialize(true), """true""");
+    assertEquals(serialize(false), """false""");
+}
+test
+shared void serializeNull() {
+    assertEquals(serialize(null), """null""");
+}
+
+serializable class Generic<Element>(element) {
     shared Element element;
 }
 test
-shared void generic() {
-    // TODO 
-    print(serialize(Generic("string")));
-    print(serialize(Generic(1)));
-    print(serialize(Generic(Generic("string"))));
+shared void serializeGeneric() {
+     
+    assertEquals(serialize(Generic("string")), """{"element":"string"}""");
+    assertEquals(serialize(Generic(1)), """{"element":1}""");
+    assertEquals(serialize(Generic(Generic("string"))), """{"element":{"element":"string"}}""");
+    
+    value generic = Generic("string");
+    assertEquals(
+        serialize { 
+            instance = generic of Object; 
+            pretty = true; 
+        }, 
+        """{
+            "class": "com.github.tombentley.alabama::Generic<ceylon.language::String>",
+            "element": "string"
+           }""");
+    
+    assertEquals(
+        serialize { 
+            instance = generic; 
+            pretty = true; 
+        }, 
+        """{
+            "element": "string"
+           }""");
 }
 
-abstract class Payment(amount) {
+abstract serializable class Payment(amount) {
     shared Float amount;
 }
-class CreditCardPayment(Float amount, cardNumber) extends Payment(amount) {
+serializable class CreditCardPayment(Float amount, cardNumber) extends Payment(amount) {
     shared String cardNumber;
 }
-class DebitCardPayment(Float amount, cardNumber) extends Payment(amount) {
+serializable class DebitCardPayment(Float amount, cardNumber) extends Payment(amount) {
     shared String cardNumber;
 }
 
 test
-shared void poly1() {
-    print(serialize(CreditCardPayment(0.99, "1234 5678 1234 5678")));
+shared void serializePolymorphic() {
+    Payment p = CreditCardPayment(0.99, "1234 5678 1234 5678");
+    assertEquals(
+        serialize { instance = p; pretty = true; },
+        """{
+            "class": "com.github.tombentley.alabama::CreditCardPayment",
+            "amount": 0.99,
+            "cardNumber": "1234 5678 1234 5678"
+           }""");
 }
 
-class NullaryConstructor {
-    shared new () {
-        assert(false);
-    }
-    new WrongConstructor() {
-        assert(false);
-    }
-    deserialization
-    new Constructor() {}
-}
 
 // TODO test ser, deser with nallary constructor
 // TODO test ser, deser annotated constructor
@@ -514,31 +274,34 @@ class NullaryConstructor {
 
 
 """Example of entities in "Ceylon style", using named constructor arguments"""
-serializable class S11nInvoice(bill, deliver, items) {
-    shared S11nPerson bill;
-    shared S11nPerson deliver;
-    shared [S11nItem+] items;
+serializable class Invoice(bill, deliver, items) {
+    shared Person bill;
+    shared Person deliver;
+    shared [Item+] items;
     shared actual String string => "invoice to: ``bill``
                                     deliver to: ``deliver``
                                     items: ``"\n".join(items)``";
 }
-serializable class S11nPerson(name, address) {
+
+serializable class Person(name, address) {
     shared String name;
-    shared S11nAddress address;
+    shared Address address;
     shared actual String string => "``name``
                                     ``address``";
 }
-serializable class S11nAddress(lines, postCode) {
+
+serializable class Address(lines, postCode) {
     shared String[] lines;
     shared String postCode;
     shared actual String string => ",\n".join(lines) + postCode;
 }
-serializable class S11nItem(product, quantity) {
-    shared S11nProduct product;
+serializable class Item(product, quantity) {
+    shared Product product;
     shared Float quantity;
     shared actual String string => "``product.sku``\t``product.description else ""`` @ £``product.unitPrice`` x ``quantity``";
 }
-serializable class S11nProduct(sku, description, unitPrice, salesTaxRate) {
+
+serializable class Product(sku, description, unitPrice, salesTaxRate) {
     shared String sku;
     shared String? description;
     shared Float unitPrice;
@@ -546,24 +309,24 @@ serializable class S11nProduct(sku, description, unitPrice, salesTaxRate) {
     
 }
 
-S11nInvoice s11nExample => S11nInvoice {
-    bill = S11nPerson {
+Invoice exampleInvoice => Invoice {
+    bill = Person {
         name = "Mr Pig";
-        address = S11nAddress {
+        address = Address {
             lines = ["3 Pigs House", "The Farm"];
             postCode = "3PH";
         };
     };
-    deliver = S11nPerson {
+    deliver = Person {
         name = "Mr Pig";
-        address = S11nAddress {
+        address = Address {
             lines = ["3 Pigs House", "The Farm"];
             postCode = "3PH";
         };
     };
     items = [
-    S11nItem {
-        product = S11nProduct {
+    Item {
+        product = Product {
             sku="123";
             description = "Bag of sand";
             unitPrice = 2.34;
@@ -571,8 +334,8 @@ S11nInvoice s11nExample => S11nInvoice {
         };
         quantity = 4.0;
     },
-    S11nItem {
-        product = S11nProduct {
+    Item {
+        product = Product {
             sku="876";
             description = "Bag of cement";
             unitPrice = 3.57;
@@ -582,3 +345,200 @@ S11nInvoice s11nExample => S11nInvoice {
     }
     ];
 };
+
+test 
+shared void s11nSerialize() {
+    print(serialize(exampleInvoice, true));
+    "needs assetions"
+    assert(false);
+}
+
+abstract serializable class AttributeCollision(collides) {
+    String collides;
+    shared actual String string => collides;
+}
+serializable class CollisionSub(collides, String sup) extends AttributeCollision(sup) {
+    shared String collides;
+}
+serializable class RenamedCollisionSub(collides, String sup) extends AttributeCollision(sup) {
+    key("foo")
+    shared String collides;
+}
+
+test 
+shared void serializeCollidingAttribute() {
+    // TODO when not renamed, do I care?
+    assertEquals(serialize(CollisionSub("sub", "super"), true),
+        """{
+            "collides": "super",
+            "collides": "sub"
+           }""");
+        
+    assertEquals(serialize(RenamedCollisionSub("sub", "super"), true),
+    """{
+        "collides": "super",
+        "foo": "sub"
+       }""");
+}
+
+serializable class Late() {
+    shared late String required;
+    shared late String? nullable;
+}
+test
+shared void serLate() {
+    print(serialize(Late(), true));
+    
+    Late l = Late();
+    l.required = "req";
+    l.nullable = "nul";
+    print(serialize(l, true));
+    "needs assetions"
+    assert(false);
+}
+
+serializable class LateVariable() {
+    shared variable late String required;
+    shared variable late String? nullable;
+}
+test
+shared void serLateVariable() {
+    print(serialize(LateVariable(), true));
+    
+    LateVariable l = LateVariable();
+    l.required = "req";
+    l.nullable = "nul";
+    print(serialize(l, true));
+    "needs assetions"
+    assert(false);
+}
+
+serializable class CyclicVariable() {
+    shared variable Anything ref = null;
+}
+test
+shared void serCyclicVariable() {
+    CyclicVariable l = CyclicVariable();
+    l.ref = l;
+    assertEquals(serialize(l, true),
+        """{
+            "#": 1,
+            "@ref": 1
+           }""");
+}
+
+serializable class CyclicLate() {
+    shared late Anything ref;
+}
+test
+shared void serCyclicLate() {
+    CyclicLate l = CyclicLate();
+    l.ref = l;
+    assertEquals(serialize(l, true),
+        """{
+            "#": 1,
+            "@ref": 1
+           }""");
+}
+
+test
+shared void serCyclicArray() {
+    Array<Anything> l = Array<Anything>.OfSize(1, null);
+    l.set(0, l);
+    print(serialize(l, true));
+    "needs assetions"
+    assert(false);
+}
+
+
+test
+shared void serEmpty() {
+    assertEquals(serialize([], true),
+    """[]""");
+    assertEquals(serialize(Generic([]), true),
+        """{
+            "element": []
+           }""" );
+}
+
+test
+shared void serTuple() {
+    assertEquals(serialize([1, "2", true], false),"""[1,"2",true]""");
+    assertEquals(serialize([Generic("S")], false),"""[{"element":"S"}]""");
+    assertEquals(serialize(Generic([1, "2", true]), false), """{"element":[1,"2",true]}""");
+    
+    assertEquals(serialize<Object>([1, "2", true], false),"""{"class":"Tuple","value":[1,"2",true]}""");
+    assertEquals(serialize<Object>([Generic("S")], false),"""{"class":Generic","value":[{"element":"S"}]}""");
+    assertEquals(serialize<Object>(Generic([1, "2", true]), false), """{"class":"Generic<Tuple<>>","element":[1,"2",true]}""");
+}
+test
+shared void serTupleWithRest() {
+    print(serialize([1, "2", true, *(0..100)], true));
+    print(serialize(Generic([1, "2", true, *(0..100)]), true));
+    "needs assetions"
+    assert(false);
+}
+
+test
+shared void serArray() {
+    assertEquals(serialize(Array{1, "2", true}, false), """[1,"2",true]""");
+    assertEquals(serialize(Generic(Array{1, "2", true}), false), """{"element":[1,"2",true]}""");
+    // in the following case we lose the fact that the top level object in an array
+    assertEquals(serialize<Object>(Array{1, "2", true}, true), 
+        """{
+            "class":"ceylon.language::Array<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>",
+            "value":[1,"2",true]
+           }""");
+}
+
+test
+shared void serArraySequence() {
+    assertEquals(serialize(Array{1, "2", true}.sequence()), """[1,"2",true]""");
+    assertEquals(serialize(Generic(Array{1, "2", true}.sequence())), """{"element":[1,"2",true]}""");
+    
+    "needs assetions for static types Object, Sequence"
+    assert(false);
+}
+
+test
+shared void serMeasure() {
+    // XXX not wrong, but not great either
+    assertEquals(serialize(measure(0, 3)),"[0,1,2]");
+    assertEquals(serialize(Generic(measure(0, 3))), """{"element":[0,1,2]}""");
+    
+    "needs assetions for static types Object, Sequence"
+    assert(false);
+}
+
+test
+shared void serSpan() {
+    // XXX not wrong, but not great either
+    assertEquals(serialize(span(0, 3)), """[0,1,2,3]""");
+    assertEquals(serialize(Generic(span(0, 3))), """{"element":[0,1,2,3]}""");
+    
+    "needs assetions for static types Object, Sequence"
+    assert(false);
+}
+
+test
+shared void serSingleton() {
+    print(serialize(Singleton('x'), true));
+    print(serialize(Generic(Singleton('x')), true));
+    "needs assetions"
+    assert(false);
+}
+
+test
+shared void serLarger() {
+    assertEquals(serialize(larger),
+        """{"class":"ceylon.language::larger"}""");
+    assertEquals(serialize(Generic(larger), true),
+    """{
+        "element": {
+         "class": "ceylon.language::larger"
+        }
+       }""");
+}
+
+// TODO a non-serializable class
+// TODO getting the right type info for attributes, and elements
