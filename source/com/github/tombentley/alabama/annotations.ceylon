@@ -1,3 +1,6 @@
+import ceylon.language.meta.model {
+    ClassModel
+}
 import ceylon.language.meta.declaration {
     ValueDeclaration,
     ClassDeclaration,
@@ -92,7 +95,12 @@ shared class ClassSerialization(clazz, omittedAttributes, ignoredKeys, keys) {
      A given AttibuteSerialization may be included more than once
      if it has aliases."
     shared Map<String, AttibuteSerialization> keys;
-
+    
+     value m = HashMap<ValueDeclaration, AttibuteSerialization>();
+     for (as in keys.items) {
+         m.put(as.attr, as);
+     }
+    shared Map<ValueDeclaration, AttibuteSerialization> byAttribute = m;
     String pretty<in Element>(Iterable<Element> c1, Iterable<Element> c2)
             given Element satisfies Object
         => ", ".join(HashSet{*c1} & HashSet{*c2});
@@ -118,9 +126,8 @@ shared class AttibuteSerialization(attr, key, aliases) {
 
 
 shared class Config(
-    {<ClassDeclaration->ClassSerialization>*} clas=[],
-    {<ValueDeclaration->AttibuteSerialization>*} attrs=[]) {
-    HashMap<ValueDeclaration, AttibuteSerialization> attributes = HashMap<ValueDeclaration, AttibuteSerialization>{*attrs};
+    {<ClassDeclaration->ClassSerialization>*} clas=[]) {
+    //HashMap<ValueDeclaration, AttibuteSerialization> attributes = HashMap<ValueDeclaration, AttibuteSerialization>{*attrs};
     HashMap<ClassDeclaration, ClassSerialization> classes = HashMap<ClassDeclaration, ClassSerialization>{*clas};
     
     "Build an [[AttibuteSerialization]] according to the annotations on [[attr].]"
@@ -140,43 +147,44 @@ shared class Config(
         
         return AttibuteSerialization(attr, key, aliases);
     }
-    shared AttibuteSerialization attribute(ValueDeclaration a) {
-        if (exists at = attributes[a]) {
-            return at;
+     
+    "Build a [[ClassSerialization]] according to the annotations on [[clazz].]"
+    ClassSerialization readClass(ClassDeclaration clazz) {
+        String[] ignoredKeys;
+        if (exists k = annotations(`IgnoredKeys`, clazz)) {
+            ignoredKeys = k.keys;
         } else {
-            value at = readAttributes(a);
-            attributes.put(a, at);
-            return at;
+            ignoredKeys = [];
         }
+        value keys = HashMap<String, AttibuteSerialization>();
+        value omittedAttributes = HashSet<ValueDeclaration>();
+        for (attr in clazz.declaredMemberDeclarations<ValueDeclaration>()) {// TODO inheritance
+            value as = readAttributes(attr);
+            if (exists other=keys.put(as.key, as)) {
+                throw AssertionError("key ``as.key`` on ``as.attr``is also used as key/alias on ``other.attr``");
+            }
+            for (al in as.aliases) {
+                if (exists other=keys.put(al, as)) {
+                    throw AssertionError("alias ``as.key`` on ``as.attr``is also used as key/alias on ``other.attr``");
+                }
+            }
+            if (attr.annotated<Omitted>()) {
+                omittedAttributes.add(attr);
+            }
+        }
+        return ClassSerialization(clazz, omittedAttributes, ignoredKeys, keys);
     }
- 
- "Build a [[ClassSerialization]] according to the annotations on [[clazz].]"
- ClassSerialization readClass(ClassDeclaration clazz) {
-     String[] ignoredKeys;
-     if (exists k = annotations(`IgnoredKeys`, clazz)) {
-         ignoredKeys = k.keys;
-     } else {
-         ignoredKeys = [];
-     }
-     value keys = HashMap<String, AttibuteSerialization>();
-     value omittedAttributes = HashSet<ValueDeclaration>();
-     for (attr in clazz.memberDeclarations<ValueDeclaration>()) {// TODO inheritance
-         value as = readAttributes(attr);
-         if (exists other=keys.put(as.key, as)) {
-             throw AssertionError("key ``as.key`` on ``as.attr``is also used as key/alias on ``other.attr``");
-         }
-         for (al in as.aliases) {
-             if (exists other=keys.put(al, as)) {
-                 throw AssertionError("alias ``as.key`` on ``as.attr``is also used as key/alias on ``other.attr``");
-             }
-         }
-         if (attr.annotated<Omitted>()) {
-             omittedAttributes.add(attr);
-         }
-     }
-     return ClassSerialization(clazz, omittedAttributes, ignoredKeys, keys);
- }
-   
+    
+    
+    "get the configuration for the given attribute"
+    shared AttibuteSerialization? attribute(ValueDeclaration a) {
+        if (is ClassDeclaration c=a.container) {
+            return clazz(c).byAttribute[a];
+        }
+        return null;
+    }
+    
+    "Get the configuration for the given class"
     shared ClassSerialization clazz(ClassDeclaration c) {
        if (exists cs = classes[c]) {
            return cs;
@@ -185,5 +193,17 @@ shared class Config(
            classes.put(c, cs);
            return cs;
        }
+    }
+    
+    shared AttibuteSerialization? resolveKey(ClassModel clazz, String key) {
+        variable ClassDeclaration? cd = clazz.declaration;
+        while (exists c=cd) {
+            value k = this.clazz(c).keys[key];
+            if (exists k) {
+                return k;
+            }
+            cd = c.extendedType?.declaration;
+        }
+        return null;
     }
 }

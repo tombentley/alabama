@@ -19,7 +19,8 @@ import ceylon.language.serialization {
     Member,
     Outer,
     Element,
-    serialization
+    serialization,
+    uninitializedLateValue
 }
 
 /*
@@ -119,7 +120,11 @@ shared class Serializer(
     SerializationContext sc = serialization();
     
     "Find everything reachable from root, 
-     giving things reachable via multiple paths an id."
+     giving things reachable via multiple paths an id.
+     
+     When we actually emit JSON output, the first time an instance in the returned map 
+     is encountered it is emitted with the corresponding id, and the id's 
+     sign is flipped. Subsequent occurrences (i.e. negative ids) will refer to that id."
     InstanceMap<Integer> assignedIds(Anything root) {
         InstanceMap<Integer> counts = InstanceMap<Integer>();
         if (exists root) {
@@ -177,7 +182,7 @@ shared class Serializer(
     void arr(Output visitor,
         InstanceMap<Integer> ids, 
         Type<> staticType, 
-        {Anything*}&Identifiable instance) {
+        Array<out Anything> instance) {
         value it = iteratedType(staticType);
         visitor.onStartArray(it, staticType);
         // XXX The question here is how to represent a reference within an array
@@ -213,7 +218,7 @@ shared class Serializer(
      the given referent directly."
     function makeKeyName(Member referent) {
         value attribute = referent.attribute;
-        return config.attribute(attribute).key;
+        return config.attribute(attribute)?.key else attribute.name;
     }
     
     "Ceylon Objects are serialized as JSON hashes (objects)."
@@ -228,13 +233,16 @@ shared class Serializer(
         if (clazz.declaration.anonymous) {
             // there's no state we care about, XXX unless it's a member!
         } else if (is Character instance) {
-            visitor.onKey("value");
+            visitor.onKey("character");
             visitor.onString(instance.string);
         } else {//serializable, hopefully
             for (ref in sc.references(instance)) {
                 value referent = ref.key;
                 switch (referent)
                 case (is Member) {
+                    if (exists i=ref.item , i== uninitializedLateValue) {
+                        continue;
+                    }
                     value id2 = getId(ids, ref.item);
                     Integer? byReference;
                     if (exists id2) {
@@ -256,7 +264,7 @@ shared class Serializer(
                             assert(exists r = ref.item); 
                             ids.put(r,-id2);
                         }
-                        val(visitor, ids, attributeType(modelType, clazz, referent.attribute.name)?.type else `Nothing`, ref.item);
+                        val(visitor, ids, attributeType(modelType, clazz, referent.attribute)?.type else `Nothing`, ref.item);
                     }
                 }
                 case (is Outer) {
@@ -289,9 +297,10 @@ shared class Serializer(
             visitor.onBoolean(instance);
         } else if (is Anything[] instance) {
             seq(visitor, ids, staticType, instance);
-        } else if (type(instance).declaration == `class Array`,// TODO need an isArray() in the metamodel
+        } else if (/*type(instance).declaration == `class Array`,// TODO need an isArray() in the metamodel
             // or more generally isInstanceOf(BaseType)
-                is {Anything*}&Identifiable instance) {
+                is {Anything*}&Identifiable instance*/
+                is Array<out Anything> instance) {
             arr(visitor, ids, staticType, instance);
         } else {
             obj(visitor, ids, staticType, instance);
@@ -301,6 +310,7 @@ shared class Serializer(
     "Serialize the given [[instance]] as events on the given [[visitor]]."
     shared void serialize<Instance>(Visitor visitor, Instance instance) {
         value x = assignedIds(instance);
+        print(x);
         // TODO The Discriminator, IdMaker etc might be different for different classes.
         variable Output output = VisitorOutput(visitor);
         output = PropertyIdMaker(output, visitor);

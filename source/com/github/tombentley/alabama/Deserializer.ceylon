@@ -16,7 +16,8 @@ import ceylon.json.stream {
     BasicEvent
 }
 import ceylon.language.meta {
-    type
+    type,
+    typeLiteral
 }
 import ceylon.language.meta.declaration {
     ValueDeclaration
@@ -49,6 +50,12 @@ class Builder<Id>(DeserializationContext<Id> dc, clazz, id)
         //print("bindAttribute(``attributeName``, ``attributeValue``) ``clazz``");
         //assert(exists attr = clazz.getAttribute<Nothing,Anything>(attributeName)); 
         ValueDeclaration vd = attribute.declaration;
+        if (attribute.string == "ceylon.language::Character.character") {
+            // XXX ^^ OMG, that's horrible! This is a special case to support
+            // characters like {"class"="Character", "value":"c"}
+            // I.e. a wrapper object around a non-serializable class
+            dc.instanceValue(id, dc.reconstruct<Character>(attributeValue));
+        } else
         if (vd.name.startsWith("@")) {
             dc.attribute(id, vd, attributeValue);
         } else {
@@ -58,23 +65,31 @@ class Builder<Id>(DeserializationContext<Id> dc, clazz, id)
         }
     }
     
-    shared Id instantiate() {
-        dc.instance(id, clazz);
-        return id;
+    shared Id->ClassModel<> instantiate() {
+        if (clazz == `Character`) {
+            // XXX ^^ part of same hack for character
+        } else if (exists ov = clazz.declaration.objectValue) {
+            dc.instanceValue(id, ov.get());
+        } else {
+            dc.instance(id, clazz);
+        }
+        return id->clazz;
     }
     
 }
 
 "A contract for building collection-like things from JSON arrays."
-interface ContainerBuilder<Id> {
+interface ContainerBuilder<Id> 
+        given Id satisfies Object {
     shared formal void addElement(Type<> et, Id element);
-    shared formal Id instantiate(
+    shared formal Id->ClassModel<> instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint);
 }
 
 class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
-        satisfies ContainerBuilder<Id> {
+        satisfies ContainerBuilder<Id> 
+        given Id satisfies Object {
     Id id;
     ArrayList<Id> elements = ArrayList<Id>(); 
     variable Type<Anything> iteratedType = `Nothing`;
@@ -82,13 +97,22 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
         elements.add(elementId);
         iteratedType = elementType.union(iteratedType);
     }
-    shared actual Id instantiate(
+    shared actual Id->ClassModel<> instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint) {
         //dc.instanceValue(id, elements.sequence());
         if (elements.empty) {
             dc.instanceValue(id, empty);
-        } else {
+            return id->type([]);
+        } else if (elements.size == 1,
+            modelHint.subtypeOf(`Singleton<Anything>`)) {
+            value singletonType = `class Singleton`.classApply<Anything,Nothing>(iteratedType);
+            dc.instance(id, singletonType);
+            assert(exists elementId = elements.first);
+            dc.attribute(id, `class Singleton`.getDeclaredMemberDeclaration<ValueDeclaration>("element") else nothing, elementId);
+            return id->singletonType;
+        }else {
+            // Use an array sequence
             Id arrayId = nextId();
             dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
             Id sizeId = nextId();
@@ -106,15 +130,18 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
             // require support from the SAPI so that arguments are fully constructed before
             // use => toposort. But that would permit serialization of classes 
             // which were not annotated serializable, which would be pretty neat.
-            dc.instance(id, `class ArraySequence`.classApply<Anything,Nothing>(iteratedType));
+            value arraySequenceType = `class ArraySequence`.classApply<Anything,Nothing>(iteratedType);
+            dc.instance(id, arraySequenceType);
             dc.attribute(id, `class ArraySequence`.getDeclaredMemberDeclaration<ValueDeclaration>("array") else nothing, arrayId);
+            return id->arraySequenceType;
         }
-        return id;
     }
 }
 
 "A [[ContainerBuilder]] for building [[Array]]s"
-class ArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) satisfies ContainerBuilder<Id> {
+class ArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) 
+        satisfies ContainerBuilder<Id> 
+        given Id satisfies Object {
     ClassModel<Object> clazz;
     Id id;
     variable Integer index = 0;
@@ -123,16 +150,18 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) satisfies Conta
         dc.element(id, index++, element);
         elementType = type(element).union(elementType);
     }
-    shared actual Id instantiate(
+    shared actual Id->ClassModel<> instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint) {
         dc.instance(id, clazz);
-        return id;
+        return id->clazz;
     }
 }
 
 shared class Deserializer<out Instance>(Type<Instance> clazz, 
     TypeNaming? typeNaming, String? typeProperty) {
+    
+    Config config = Config();
     
     value dc = deser<Integer>();
     variable value id = 0;
@@ -150,11 +179,11 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
     
     shared Instance deserialize(Iterator<BasicEvent>&Positioned input) {
         this.input = PeekIterator(input);
-        return dc.reconstruct<Instance>(val(clazz));
+        return dc.reconstruct<Instance>(val(clazz).key);
     }
     
     "Peek at the next event in the stream and return the instance for it"
-    Integer val(Type<> modelType) {
+    Integer->ClassModel<> val(Type<> modelType) {
         //print("val(modelType=``modelType``)");
         switch (item=stream.peek)
         case (is ObjectStartEvent) {
@@ -166,60 +195,65 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         }
         case (is String) {
             stream.next();
-            if (modelType.subtypeOf(`String|Null`)) {
+            if (modelType.supertypeOf(`String`)) {
                 //print("val(modelType=``modelType``): ``item``");
                 value n = nextId();
                 dc.instanceValue(n, item);
-                return n;
+                return n->`String`;
+            } else if (item.size == 1,
+                    modelType.supertypeOf(`Character`)) {
+                value n = nextId();
+                dc.instanceValue(n, item.first);
+                return n->`Character`;
             }
-            throw Exception("JSON value \"``item``\" cannot be coerced to ``modelType``");
+            throw Exception("JSON String \"``item``\" cannot be coerced to ``modelType``");
         }
         case (is Integer) {
             stream.next();
-            if (modelType.subtypeOf(`Integer|Null`)) {
+            if (modelType.supertypeOf(`Integer`)) {
                 //print("val(modelType=``modelType``): ``item``");
                 value n = nextId();
                 dc.instanceValue(n, item);
-                return n;
+                return n->`Integer`;
             }
-            throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
+            throw Exception("JSON Number ``item`` cannot be coerced to ``modelType``");
         }
         case (is Float) {
             stream.next();
-            if (modelType.subtypeOf(`Float|Null`)) {
+            if (modelType.supertypeOf(`Float`)) {
                 //print("val(modelType=``modelType``): ``item``");
                 value n = nextId();
                 dc.instanceValue(n, item);
-                return n;
+                return n->`Float`;
             }
-            throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
+            throw Exception("JSON Number ``item`` cannot be coerced to ``modelType``");
         }
         case (is Boolean) {
             stream.next();
-            if (modelType.subtypeOf(`Boolean|Null`)) {
+            if (modelType.supertypeOf(`Boolean`)) {
                 //print("val(modelType=``modelType``): ``item``");
                 value n = nextId();
                 dc.instanceValue(n, item);
-                return n;
+                return n->`Boolean`;
             }
-            throw Exception("JSON value ``item`` cannot be coerced to ``modelType``");
+            throw Exception("JSON Boolean ``item`` cannot be coerced to ``modelType``");
         }
         case (is Null) {
             stream.next();
-            if (modelType.subtypeOf(`Null`)) {
+            if (modelType.supertypeOf(`Null`)) {
                 //print("val(modelType=``modelType``): null");
                 value n = nextId();
                 dc.instanceValue(n, item);
-                return n;
+                return n->`Null`;
             }
-            throw Exception("JSON value null cannot be coerced to ``modelType``");
+            throw Exception("JSON Null null cannot be coerced to ``modelType``");
         }
         else {
             throw Exception("Unexpected event ``item``");
         }
     }
     
-    Integer arr(Type<> modelType) {
+    Integer->ClassModel<> arr(Type<> modelType) {
         //print("arr(modelType=``modelType``)");
         assert(stream.next() is ArrayStartEvent);// consume initial {
         // not a SequenceBuilder, something else
@@ -231,7 +265,8 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             switch(item=stream.peek)
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
                 // TODO val knows the type of the thing it's creating, so we should use that as the et
-                builder.addElement(iteratedType(modelType), val(iteratedType(modelType)));
+                value xx = val(iteratedType(modelType));
+                builder.addElement(xx.item, xx.key);
             }
             case (is ArrayEndEvent) {
                 stream.next();// consume ]
@@ -247,7 +282,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
     }
     
     "Consume the next object from the [[stream]] and return the instance for it"
-    Integer obj(Type<> modelType) {
+    Integer->ClassModel<> obj(Type<> modelType) {
         //print("obj(modelType=``modelType``)");
         assert(stream.next() is ObjectStartEvent);// consume initial {
         Type<> dataType;
@@ -275,13 +310,13 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         }
         Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
         Builder<Integer> builder = Builder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
-        
         variable Attribute<>? attribute = null;
+        variable Boolean byRef = false;
         while(true) {
             switch (item = stream.peek)
             case (is ObjectStartEvent) {
                 assert(exists attr=attribute);
-                builder.bindAttribute(attr, obj(attr.type));
+                builder.bindAttribute(attr, obj(attr.type).key);
                 attribute = null;
             }
             case (is ObjectEndEvent) {
@@ -293,7 +328,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             }
             case (is ArrayStartEvent) {
                 assert(exists attr=attribute);
-                builder.bindAttribute(attr, arr(eliminateNull(attr.type)));
+                builder.bindAttribute(attr, arr(eliminateNull(attr.type)).key);
                 attribute = null;
             }
             case (is ArrayEndEvent) {
@@ -303,11 +338,37 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             case (is KeyEvent) {
                 stream.next();// consume what we peeked
                 //print("key: ``item.eventValue``");
-                attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), item.eventValue);
+                value jsonKey = item.eventValue;
+                String keyName;
+                if (jsonKey.startsWith("@")) {
+                    byRef=true;
+                    keyName = jsonKey[1...];
+                } else {
+                    byRef = false;
+                    keyName = jsonKey;
+                }
+                if (jsonKey in config.clazz(clazz.declaration).ignoredKeys) {
+                    // TODO need to ignore the whole subtree
+                    // TODO is ignoredKeys inherited? 
+                    
+                } else if (exists ac=config.resolveKey(clazz, keyName)){
+                    // TODO lots to do here.
+                    //Why we passing modelType and dataType to attributeType
+                    //When we already decided to instantiate a clazz?
+                    //Why it called attributeType when it returns an Attribute?
+                    attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), ac.attr);
+                }
+                if (!attribute exists) {
+                    throw Exception("Couldn't find attribute for key '``jsonKey``' on ``clazz``");
+                }
             }
             case (is String|Integer|Float|Boolean|Null) {
                 assert(exists attr=attribute);
-                builder.bindAttribute(attr, val(attr.type));
+                if (byRef, is Integer item) {
+                    builder.bindAttribute(attr, item);
+                } else {
+                    builder.bindAttribute(attr, val(attr.type).key);
+                }
                 attribute = null;
             }
         }
@@ -380,7 +441,7 @@ Type<Anything> iteratedType(Type<Anything> containerType) {
 
 "Figure out the type of the attribute of the given name that's a member of
  modelType or jsonType"
-Attribute? attributeType(Type<> modelType, Type<> jsonType, String attributeName) {
+Attribute? attributeType(Type<> modelType, Type<> jsonType, ValueDeclaration attribute) {
     Type<> type;
     if (!jsonType.exactly(`Nothing`)) {
         type = jsonType;
@@ -399,10 +460,20 @@ Attribute? attributeType(Type<> modelType, Type<> jsonType, String attributeName
         //value r = `function ClassOrInterface.getAttribute`.memberInvoke(qualifierType, [qualifierType, `Anything`, `Nothing`], attributeName);
         //assert(is Attribute<Nothing, Anything, Nothing> r);
         //result = r.type;
-        if (exists a = qualifierType.getAttribute<Nothing,Anything,Nothing>(attributeName)) {
-            return a;
+        // XXX this is wrong: It doesn't cope with colliding attrs or non-shared attrs
+        if (attribute.shared) {
+            return qualifierType.getAttribute<Nothing,Anything,Nothing>(attribute.name);
         } else {
-            throw Exception("Couldn't find ``attributeName`` in ``qualifierType``");
+            if (is ClassModel<> qualifierType) {
+                variable ClassModel<>? q = qualifierType;
+                while(exists p=q) { 
+                    if (p.declaration == attribute.container) {
+                        return p.getDeclaredAttribute<Nothing,Anything,Nothing>(attribute.name);
+                    }
+                    q = q?.extendedType;
+                }
+            }
+            throw Exception("Couldn't find ``attribute`` in ``qualifierType``");
         }
     } else {
         return null;
@@ -422,4 +493,11 @@ Type<> eliminateNull(Type<> type) {
     } else {
         return type;
     }
+}
+
+shared Instance deserialize<Instance>(String json) {
+    Type<Instance> clazz = typeLiteral<Instance>();
+    Deserializer<Instance> deser = Deserializer<Instance>(clazz, fqTypeNaming, "class");
+    return deser.deserialize(StreamParser(StringTokenizer(json)));
+    
 }

@@ -95,7 +95,7 @@ class Tokenizer(input) {
                     if (char2 == ':') {
                         return Token(dtDColon, input[ii:2], ii);
                     } else {
-                        throw Exception("tokenization error, expected ::, not :``char2`` at index ``ii``");
+                        throw Exception("tokenization error, expected ::, not :``char2`` at index ``ii``: ``input``");
                     }
                 }
                 throw Exception("unexpected end of input");
@@ -114,12 +114,12 @@ class Tokenizer(input) {
                         } else if (char2 == "i") {
                             return ident(dtLower, char2.string, ii);
                         } else {
-                            throw Exception("tokenization error, expected \\i or \\I, not :\\``char2`` at index ``ii``");
+                            throw Exception("tokenization error, expected \\i or \\I, not :\\``char2`` at index ``ii``: ``input``");
                         }
                     }
                     throw Exception("unexpected end of input");
                 }else {
-                    throw Exception("unexpected character ``char`` at index ``ii``");
+                    throw Exception("unexpected character ``char`` at index ``ii``: ``input``");
                 }
             }
         } else {
@@ -152,7 +152,7 @@ class Tokenizer(input) {
         if (current.type == type) {
             return consume();
         } else {
-            throw AssertionError("unexpected token: expected ``type``, found ``current``");
+            throw AssertionError("unexpected token: expected ``type``, found ``current``: ``input``");
         }
     }
     
@@ -237,12 +237,16 @@ class TypeParser(String input) {
     }
     
     """declaration ::= packageName '::' typeName ;"""
-    Type<Nothing>|ClassOrInterfaceDeclaration declaration() {
+    Type<>|ClassOrInterfaceDeclaration declaration() {
         Package p = packageName();
         tokenizer.expect(dtDColon);
         value t = typeName();
         if (exists r = p.getClassOrInterface(t)) {
             return r;
+        } else if (exists f=t.first,
+                f.lowercase,
+                exists r = p.getMember<ValueDeclaration>(t)) {
+            return r.apply<Anything,Nothing>().type;
         } else {
             if (t == "Nothing"
                 && p.name == "ceylon.language") {
@@ -270,7 +274,13 @@ class TypeParser(String input) {
     
     """typeName ::= uident;"""
     String typeName() {
-        return tokenizer.expect(dtUpper);
+        if (tokenizer.current.type == dtUpper
+            ||tokenizer.current.type == dtLower) {
+            return tokenizer.consume();
+        } else {
+            throw AssertionError("unexpected token: expected ``dtUpper`` or ``dtLower``, found ``tokenizer.current``: ``input``");
+        }
+        //return tokenizer.expect(dtUpper);
     }
     
     """packageName ::= lident (. lident)* ;"""
@@ -421,7 +431,7 @@ class ModelParser() {
     }
     
     """qualifiedDeclaration ::= packageName '::' declarationName ;"""
-    Type<Nothing>|TypedDeclaration declaration(Tokenizer tokenizer) {
+    Type<>|TypedDeclaration declaration(Tokenizer tokenizer) {
         Package p = packageName(tokenizer);
         tokenizer.expect(dtDColon);
         value t = declarationName(tokenizer);
