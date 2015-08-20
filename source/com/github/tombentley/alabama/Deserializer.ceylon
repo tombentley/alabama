@@ -13,7 +13,7 @@ import ceylon.json.stream {
     ObjectStartEvent,
     ObjectEndEvent,
     StreamParser,
-    BasicEvent
+    BasicEvent=Event
 }
 import ceylon.language.meta {
     type,
@@ -295,7 +295,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             // In practice we can ensure the serializer emits @type
             // as the first key, to keep such buffering to a minimum
             if (is KeyEvent k = stream.peek,
-                k.eventValue == typeProperty) {
+                k.key == typeProperty) {
                 stream.next();//consume @type
                 if (is String typeName = stream.next()) {
                     dataType = typeNaming.type(typeName);
@@ -338,7 +338,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             case (is KeyEvent) {
                 stream.next();// consume what we peeked
                 //print("key: ``item.eventValue``");
-                value jsonKey = item.eventValue;
+                value jsonKey = item.key;
                 String keyName;
                 if (jsonKey.startsWith("@")) {
                     byRef=true;

@@ -410,7 +410,7 @@ shared void serCyclicLate() {
 
 test
 shared void serCyclicArray() {
-    Array<Anything> l = Array<Anything>.OfSize(1, null);
+    Array<Anything> l = Array<Anything>.ofSize(1, null);
     l.set(0, l);
     print(serialize(l, true));
     "needs assetions"
