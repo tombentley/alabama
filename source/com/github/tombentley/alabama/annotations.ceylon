@@ -1,40 +1,83 @@
-import ceylon.language.meta.model {
-    ClassModel
-}
-import ceylon.language.meta.declaration {
-    ValueDeclaration,
-    ClassDeclaration,
-    ConstructorDeclaration
+import ceylon.collection {
+    HashMap,
+    HashSet
 }
 import ceylon.language.meta {
     annotations
 }
-import ceylon.collection {
-    HashMap,
-    HashSet,
-    ArrayList
+import ceylon.language.meta.declaration {
+    ValueDeclaration,
+    ClassDeclaration
 }
+import ceylon.language.meta.model {
+    ClassModel
+}
+
+"Annotation class for [[key]]."
 shared final annotation class Key(key) 
         satisfies OptionalAnnotation<Key, ValueDeclaration>{
     shared String key;
 }
-"Specifies the name of the key used when writing and reading JSON."
+
+"""Specifies the name of the key used when writing and reading JSON.
+   
+   For example the class
+   
+       class Foo(name) {
+           key("firstName")
+           shared String name;
+       }
+       
+   Would be serialized with the `name` attribute haing the `firstName` key:
+   
+    ```
+    {
+        "firstName": "John";
+    } 
+   """
 see(`function aliasedKey`)
 shared annotation Key key(String key) => Key(key);
 
+"Annotation class for [[aliasedKey]]."
 shared final annotation class AliasedKey(key) 
         satisfies SequencedAnnotation<AliasedKey, ValueDeclaration>{
     shared String key;
 }
-"Specifies an alternative name for an attribute when reading JSON. 
- This can be useful to support attribute renaming while maintaining 
- compatibility with serialized data."
+
+"""Specifies an alternative name for an attribute when reading JSON. 
+   This can be useful to support attribute renaming while maintaining 
+   compatibility with serialized data.
+ 
+   For example the initial version of a class might be:
+ 
+       class Foo(name) {
+           shared String name;
+       }
+     
+   And thus might be serialized as:
+ 
+   ```
+   { "name": "John" }
+   ```
+   
+   Then we might refactor `Foo`, renaming `name` to `firstName`, but still 
+   need to read in old-style JSON:
+   
+       class Foo(firstName) {
+           aliasedKey("name")
+           shared String firstName;
+       }
+       
+    
+ """
 see(`function key`)
 shared annotation AliasedKey aliasedKey(String name) => AliasedKey(name);
 
+"Annotation class for [[omittedAttribute]]."
 shared final annotation class Omitted() 
         satisfies OptionalAnnotation<Omitted, ValueDeclaration>{
 }
+
 "Annotates an attribute which should not be included when writing JSON.
  
  Omitting an attribute genererally means the JSON won't be deserializable
@@ -43,9 +86,11 @@ shared final annotation class Omitted()
 see(`function ignoredKeys`)
 shared annotation Omitted omittedAttribute() => Omitted();// unserializable? ignored? notWritten
 
+"Annotation class for [[includedAttribute]]."
 shared final annotation class Included() 
         satisfies OptionalAnnotation<Included, ValueDeclaration>{
 }
+
 "Annotates a non-reference (i.e. getter) attribute which should be 
  included when writing JSON.
  
@@ -56,11 +101,13 @@ shared final annotation class Included()
 see(`function ignoredKeys`)
 shared annotation Included includedAttribute() => Included();
 
+"Annotation class for [[ignoredKeys]]."
 shared final annotation class IgnoredKeys(keys) 
         satisfies OptionalAnnotation<IgnoredKeys, ClassDeclaration>{
     shared String[] keys;
 }
 
+"Annotation class for [[identifier]]."
 shared final annotation class Identifier() 
         satisfies OptionalAnnotation<Identifier, ValueDeclaration>{
 }
@@ -69,6 +116,7 @@ shared final annotation class Identifier()
 shared annotation Identifier identifier() => Identifier();
 
 
+"Annotation class for [[discriminator]]."
 shared final annotation class Discriminator() 
         satisfies OptionalAnnotation<Discriminator, ValueDeclaration>{
 }
@@ -195,7 +243,7 @@ shared class Config(
        }
     }
     
-    shared AttibuteSerialization? resolveKey(ClassModel clazz, String key) {
+    shared AttibuteSerialization? resolveKey(ClassModel<> clazz, String key) {
         variable ClassDeclaration? cd = clazz.declaration;
         while (exists c=cd) {
             value k = this.clazz(c).keys[key];
@@ -207,3 +255,4 @@ shared class Config(
         return null;
     }
 }
+

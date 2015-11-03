@@ -11,17 +11,35 @@ shared interface TypeNaming {
     shared formal Type<> type(String name);
     shared formal String name(Type<> type);
 }
+
+"""Encoding and decoding of instance types using a ("@type") 
+   attribute in the JSON hash whose value is the fully 
+   qualified type name."""
 shared object fqTypeNaming satisfies TypeNaming {
     shared actual Type<> type(String name) => parseType(name);
     shared actual String name(Type<Anything> type) => type.string;
 }
+
+"""Encoding and decodeing of instance types using a ("@type") 
+   attribute in the JSON hash whose value is an arbitrary `String` in a 
+   bijective mapping from types to type names."""
 shared class LogicalTypeNaming({<String->Type<>>*} names) satisfies TypeNaming {
     value toType = HashMap<String,Type<>>{*names};
     value toName = HashMap<Type<>, String>{};
     for (name -> type in names) {
         toName.put(type, name);
     }
-    shared actual Type<> type(String name) => toType[name] else nothing;
-    shared actual String name(Type<Anything> type) => toName[name] else nothing;
+    shared actual Type<> type(String name) {
+        if (exists r=toType[name]) {
+            return r;
+        }
+        throw Exception("No type mapping for name ``name``");
+    }
+    shared actual String name(Type<Anything> type) {
+        if (exists r = toName[name]) {
+            return r;
+        }
+        throw Exception("No type mapping for type ``type``");
+    }
 }
 

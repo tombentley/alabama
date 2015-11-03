@@ -8,7 +8,8 @@ import ceylon.json {
 }
 import ceylon.language.meta {
     type,
-    typeLiteral
+    typeLiteral,
+    classDeclaration
 }
 import ceylon.language.meta.model {
     Type,
@@ -134,6 +135,8 @@ shared class Serializer(
         return x;
     }
     
+    "Recursively walk the object graph from [[root]], assigning ids to 
+     instances that need them, recorded in [[counts]]."
     void assignedIdsInternal(IdGenerator idGenerator, Object root, InstanceMap<Integer> counts) {
         // TODO configurable two cases: generate id when it's a graph (i.e. copy subtrees)
         // OR generate id when it's a **cyclic** graph
@@ -146,12 +149,15 @@ shared class Serializer(
         counts.put(root, count);
         if (count == -1 // not yet visited
                 //&& !(root is String|Character|Integer|Boolean|Float|Null)
-                && type(root).declaration.serializable) {
-            //assume it's serializable serializable
+                && classDeclaration(root).serializable) {
+            //assume it's serializable
             value references = sc.references(root);
             for (ref in references.references) {
                 if (exists referred=ref.referred(root),
-                        !referred is Integer|Float|String|Boolean) {
+                        !referred is Integer|Float|String|Boolean|Tuple<Anything,Anything,Anything[]>) {
+                    // Tuple is not Identifiable and because it outputs as [1,2] we can't easily add a # key for an id
+                    // so by not assigning it an id we include each occurrence of a tuple as a subtree
+                    // even if it's just a single instance!
                     if (exists c = counts.get(referred),
                         c == -1) {
                         counts.put(referred, idGenerator.next());
@@ -280,7 +286,7 @@ shared class Serializer(
         visitor.onEndObject(id, if (modelType != clazz) then clazz else null);
     }
     
-    "Serialize a value"
+    "Serialize a value, recursively for objects and arrays"
     void  val(Output visitor,
             InstanceMap<Integer> ids,
             Type<> staticType, 
@@ -309,14 +315,18 @@ shared class Serializer(
     
     "Serialize the given [[instance]] as events on the given [[visitor]]."
     shared void serialize<Instance>(Visitor visitor, Instance instance) {
-        value x = assignedIds(instance);
-        print(x);
+        // visit the graph assigning ids to things that can't be included 
+        // by nesting
+        value ids = assignedIds(instance);
         // TODO The Discriminator, IdMaker etc might be different for different classes.
         variable Output output = VisitorOutput(visitor);
+        // add decorators to the output which will add ids (using # key)...
         output = PropertyIdMaker(output, visitor);
+        // ...and @type keys...
         output = TypeAttribute(output, visitor);
+        // ... and @foo keys for things in cycles
         output = AttributeReferencer(output, visitor);
-        val(output, x, typeLiteral<Instance>(), instance);
+        val(output, ids, typeLiteral<Instance>(), instance);
     }
 }
 
@@ -345,6 +355,8 @@ shared interface Output {
     shared formal void onBoolean(Boolean boolean);
     shared formal void onNull();
 }
+"Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
+ [[Output]]."
 class VisitorOutput(Visitor visitor) satisfies Output {
     shared actual default void onBoolean(Boolean boolean) {
         visitor.onBoolean(boolean);
@@ -551,38 +563,4 @@ class AttributeReferencer(Output delegate, Visitor visitor, String prefix="@") e
         visitor.onKey(prefix + key);
         visitor.onNumber(id);
     }
-}
-
-shared void runSer() {
-    value serializer = Serializer {
-         
-    };
-    variable value times = 2000;
-    variable value hs = 0;
-    for (i in 1..times) {
-        value visitor = StringEmitter();
-        serializer.serialize(visitor, exampleInvoice);
-        value x = visitor.string;
-        if (i == 1) {
-            print(x);
-        }
-        hs+=x.hash; 
-    }
-    print("press enter");
-    process.readLine();
-    times = 8000;
-    value t0 = system.nanoseconds;
-    for (i in 1..times) {
-        value visitor = StringEmitter();
-        serializer.serialize(visitor, exampleInvoice);
-        value x = visitor.string;
-        if (i == 1) {
-            print(x);
-        }
-        hs+=x.hash; 
-    }
-    value elapsed = (system.nanoseconds - t0)/1_000_000.0;
-    print("``elapsed``ms total");
-    print("``elapsed/times``ms per deserialization");
-    print(hs);
 }

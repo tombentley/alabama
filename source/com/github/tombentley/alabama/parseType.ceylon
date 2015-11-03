@@ -20,7 +20,7 @@ import ceylon.language.meta.model {
     Model,
     Function,
     Class,
-    ConstructorModel
+    ConstructorModel=CallableConstructor
 }
 
 
@@ -47,7 +47,7 @@ object dtLower extends TokenType("lower") {}
 object dtEoi extends TokenType("<eoi>") {}
 
 
-"The tokenizer used by [[DatumParser]]."
+"The tokenizer used by [[TypeParser]]."
 class Tokenizer(input) {
     "The input stream that we're tokenizing."
     shared String input;
@@ -381,7 +381,7 @@ class ModelParser() {
     """qualifiedModel ::= qualifiedDeclaration typeArguments? ('.' declarationName  typeArguments?)* ;"""
     Model|Type<>|ConstructorModel<> qualifiedModel(Tokenizer tokenizer) {
         value d = declaration(tokenizer);
-        Type[]? ta = typeArguments(tokenizer);
+        Type<>[]? ta = typeArguments(tokenizer);
         if (is ClassOrInterfaceDeclaration d) {
             variable Model|Type<>|ConstructorModel<> result = d.apply<Anything>(*(ta else []));
             while (tokenizer.isType(dtDot)) {

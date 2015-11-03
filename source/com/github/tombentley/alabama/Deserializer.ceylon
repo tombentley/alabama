@@ -375,42 +375,6 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
     }
 }
 
-shared void run() {
-    value deserializer = Deserializer {
-        clazz = `Invoice`;
-        typeNaming = LogicalTypeNaming(HashMap{
-                "Person" -> `Person`,
-                "Address" -> `Address`,
-                "Item" -> `Item`,
-                "Product" -> `Product`,
-                "Invoice" -> `Invoice`
-            });
-        typeProperty = "class"; 
-    };
-    variable value times = 1000;
-    variable value hs = 0;
-    for (i in 1..times) {
-        value x = deserializer.deserialize(StreamParser(StringTokenizer(exampleJson)));
-        if (i == 1) {
-            print(x);
-        }
-        hs+=x.hash; 
-    }
-    print("press enter");
-    process.readLine();
-    times = 4000;
-    value t0 = system.nanoseconds;
-    for (i in 1..times) {
-        value x = deserializer.deserialize(StreamParser(StringTokenizer(exampleJson)));
-        //print(x);
-       hs+=x.hash; 
-    }
-    value elapsed = (system.nanoseconds - t0)/1_000_000.0;
-    print("``elapsed``ms total");
-    print("``elapsed/times``ms per deserialization");
-    print(hs);
-}
-
 
 Class<Object> bestType(Type<> modelType, Type<> keyType) {
     Class<Object> clazz;// TODO use hints to figure out an instantiable class
@@ -484,7 +448,7 @@ Attribute? attributeType(Type<> modelType, Type<> jsonType, ValueDeclaration att
 Type<> eliminateNull(Type<> type) {
     if (is UnionType<> type) {
         if (type.caseTypes.size == 2,
-            exists nullIndex=type.caseTypes.firstOccurrence(`Null`)) {
+            exists nullIndex=type.caseTypes.firstIndexWhere((e) => e == `Null`)) {
             assert(exists definite = type.caseTypes[1-nullIndex]);
             return definite;
         } else {

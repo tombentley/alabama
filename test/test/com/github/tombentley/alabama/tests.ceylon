@@ -3,43 +3,38 @@ import ceylon.test {
     assertEquals,
     fail
 }
-import ceylon.language.meta.declaration {
-    ValueDeclaration
-}
-import ceylon.language.meta.model {
-    ClassOrInterface
-}
-import ceylon.language.serialization {
-    serialization
-}
-import ceylon.json{
-    StringEmitter,
-    StringTokenizer
-}
-import ceylon.json.stream{
-    StreamParser
+
+import com.github.tombentley.alabama {
+    Config,
+    omittedAttribute,
+    deserialize,
+    serialize,
+    aliasedKey,
+    key,
+    ignoredKeys
 }
 
 test
 shared void serializeInvoice() {
-    assertEquals("""{
+    assertEquals(serialize(exampleInvoice, true),
+                 """{
                      "bill": {
                       "name": "Mr Pig",
                       "address": {
-                       "lines": {
-                        "#":1,
-                        "value":[
-                         "3 Pigs House",
-                         "The Farm"
-                        ]
-                       },
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ],
                        "postCode": "3PH"
                       }
                      },
                      "deliver": {
                       "name": "Mr Pig",
                       "address": {
-                       "@lines": 1,
+                       "lines": [
+                        "3 Pigs House",
+                        "The Farm"
+                       ],
                        "postCode": "3PH"
                       }
                      },
@@ -63,8 +58,7 @@ shared void serializeInvoice() {
                        "quantity": 1.0
                       }
                      ]
-                    }""", 
-    serialize(exampleInvoice, true));
+                    }""");
 }
 
 
@@ -151,6 +145,7 @@ shared void readingAnnotations() {
     variable value cs = cfg.clazz(`class AnnotationsExample`);
     assert(`class AnnotationsExample` == cs.clazz);
     assert(["gee"] == cs.ignoredKeys);
+    value xx = `value AnnotationsExample.baz` in cs.omittedAttributes;
     assert(`value AnnotationsExample.baz` in cs.omittedAttributes);
     assert(exists b= cs.keys["foo"]);
     assert(exists b2= cs.keys["fooble"]);
@@ -215,7 +210,7 @@ serializable class Generic<Element>(element) {
 }
 test
 shared void serializeGeneric() {
-     
+    
     assertEquals(serialize(Generic("string")), """{"element":"string"}""");
     assertEquals(serialize(Generic(1)), """{"element":1}""");
     assertEquals(serialize(Generic(Generic("string"))), """{"element":{"element":"string"}}""");
@@ -227,18 +222,18 @@ shared void serializeGeneric() {
             pretty = true; 
         }, 
         """{
-            "class": "com.github.tombentley.alabama::Generic<ceylon.language::String>",
+            "class": "test.com.github.tombentley.alabama::Generic<ceylon.language::String>",
             "element": "string"
            }""");
-    
-    assertEquals(
-        serialize { 
-            instance = generic; 
-            pretty = true; 
-        }, 
-        """{
-            "element": "string"
-           }""");
+        
+        assertEquals(
+            serialize { 
+                instance = generic; 
+                pretty = true; 
+            }, 
+            """{
+                "element": "string"
+               }""");
 }
 
 abstract serializable class Payment(amount) {
@@ -257,7 +252,7 @@ shared void serializePolymorphic() {
     assertEquals(
         serialize { instance = p; pretty = true; },
         """{
-            "class": "com.github.tombentley.alabama::CreditCardPayment",
+            "class": "test.com.github.tombentley.alabama::CreditCardPayment",
             "amount": 0.99,
             "cardNumber": "1234 5678 1234 5678"
            }""");
@@ -347,7 +342,7 @@ Invoice exampleInvoice => Invoice {
 test 
 shared void s11nSerialize() {
     print(serialize(exampleInvoice, true));
-    "needs assetions"
+    "needs assertions"
     assert(false);
 }
 
@@ -371,12 +366,12 @@ shared void serializeCollidingAttribute() {
             "collides": "super",
             "collides": 42
            }""");
-        
+    
     assertEquals(serialize(RenamedCollisionSub(42, "super"), true),
-    """{
-        "collides": "super",
-        "foo": 42
-       }""");
+        """{
+            "collides": "super",
+            "foo": 42
+           }""");
     // TODO need to test deserialization too
 }
 
@@ -421,7 +416,7 @@ shared void serCyclicArray() {
 test
 shared void serEmpty() {
     assertEquals(serialize([], true),
-    """[]""");
+        """[]""");
     assertEquals(serialize(Generic([]), true),
         """{
             "element": []
@@ -463,7 +458,7 @@ shared void serArraySequence() {
     assertEquals(serialize(Array{1, "2", true}.sequence()), """[1,"2",true]""");
     assertEquals(serialize(Generic(Array{1, "2", true}.sequence())), """{"element":[1,"2",true]}""");
     
-    "needs assetions for static types Object, Sequence"
+    "needs assertions for static types Object, Sequence"
     assert(false);
 }
 
@@ -473,8 +468,8 @@ shared void serMeasure() {
     assertEquals(serialize(measure(0, 3)),"[0,1,2]");
     assertEquals(serialize(Generic(measure(0, 3))), """{"element":[0,1,2]}""");
     
-    "needs assetions for static types Object, Sequence"
-    assert(false);
+    assertEquals(serialize<Object>(measure(0, 3)),"""{"type":"","value":[0,1,2]""");
+    //assertEquals(serialize(Generic<Object>(measure(0, 3))), """{"element":[0,1,2]}""");
 }
 
 test
@@ -483,7 +478,7 @@ shared void serSpan() {
     assertEquals(serialize(span(0, 3)), """[0,1,2,3]""");
     assertEquals(serialize(Generic(span(0, 3))), """{"element":[0,1,2,3]}""");
     
-    "needs assetions for static types Object, Sequence"
+    "needs assertions for static types Object, Sequence"
     assert(false);
 }
 
@@ -595,7 +590,7 @@ shared void rtStringContainer() {
     assertEquals(deserialize<StringContainer>(json).string, "hello, world");
     
     json = serialize(StringContainer("hello, world") of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::StringContainer","string":"hello, world"}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::StringContainer","string":"hello, world"}""");
     assertEquals(deserialize<Object>(json).string, "hello, world");
 }
 
@@ -606,7 +601,7 @@ shared void rtGenericString() {
     assertEquals(deserialize<Generic<String>>(json).element, "hello, world");
     
     json = serialize(Generic("hello, world") of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Generic<ceylon.language::String>","element":"hello, world"}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::String>","element":"hello, world"}""");
     assert(is Generic<String> o = deserialize<Object>(json));
     assertEquals(o.element, "hello, world");
 }
@@ -622,12 +617,12 @@ shared void rtGenericOptionalString() {
     assertEquals(deserialize<Generic<String?>>(json).element, null);
     
     json = serialize(Generic<String?>("hello, world") of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":"hello, world"}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":"hello, world"}""");
     assert(is Generic<String?> o = deserialize<Object>(json));
     assertEquals(o.element, "hello, world");
     
     json = serialize(Generic<String?>(null) of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":null}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":null}""");
     assert(is Generic<String?> o2 = deserialize<Object>(json));
     assertEquals(o2.element, null);
 }
@@ -639,7 +634,7 @@ shared void rtGenericCharacter() {
     assertEquals(deserialize<Generic<Character>>(json).element, 'x');
     
     json = serialize(Generic('x') of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Generic<ceylon.language::Character>","element":"x"}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Character>","element":"x"}""");
     assert(is Generic<Character> o = deserialize<Object>(json));
     assertEquals(o.element, 'x');
 }
@@ -651,7 +646,7 @@ shared void rtGenericEmpty() {
     assertEquals(deserialize<Generic<String[]>>(json).element, []);
     
     json = serialize(Generic([] of String[]) of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Generic<ceylon.language::Sequential<ceylon.language::String>>","element":[]}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Sequential<ceylon.language::String>>","element":[]}""");
     assert(is Generic<String[]> o = deserialize<Object>(json));
     assertEquals(o.element, []);
 }
@@ -663,7 +658,7 @@ shared void rtGenericLarger() {
     assertEquals(deserialize<Generic<Comparison>>(json).element, larger);
     
     json = serialize(Generic(larger) of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Generic<ceylon.language::Comparison>","element":{"class":"ceylon.language::larger"}}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Comparison>","element":{"class":"ceylon.language::larger"}}""");
     assert(is Generic<Comparison> o = deserialize<Object>(json));
     assertEquals(o.element, larger);
 }
@@ -676,7 +671,7 @@ serializable class Late() {
 test
 shared void rtLate() {
     variable String json = serialize(Late() of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::Late"}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Late"}""");
     variable Late r = deserialize<Late>(json);
     r.required = "";
     r.nullable = null;
@@ -686,10 +681,10 @@ shared void rtLate() {
     l.nullable = "nul";
     json = serialize(l, true);
     assertEquals(json,
-    """{
-        "required": "req",
-        "nullable": "nul"
-       }""");
+        """{
+            "required": "req",
+            "nullable": "nul"
+           }""");
     r = deserialize<Late>(json);
     assertEquals(r.required, "req");
     assertEquals(r.nullable, "nul");
@@ -703,7 +698,7 @@ serializable class LateVariable() {
 test
 shared void rtLateVariable() {
     variable String json = serialize(LateVariable() of Object);
-    assertEquals(json, """{"class":"com.github.tombentley.alabama::LateVariable"}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::LateVariable"}""");
     variable LateVariable r = deserialize<LateVariable>(json);
     r.required = "";
     r.nullable = null;
@@ -792,74 +787,16 @@ shared void rtDiamond() {
     variable value json = serialize(top, true);
     assertEquals(json, """{
                            "left": {
-                            "class": "com.github.tombentley.alabama::One",
+                            "class": "test.com.github.tombentley.alabama::One",
                             "first": {
                              "#": 1,
-                             "class": "com.github.tombentley.alabama::Zero"
+                             "class": "test.com.github.tombentley.alabama::Zero"
                             }
                            },
                            "right": {
-                            "class": "com.github.tombentley.alabama::One",
+                            "class": "test.com.github.tombentley.alabama::One",
                             "@first": 1
                            }
                           }""");
 }
 
-shared void profile() {
-    value serializer = Serializer {
-        
-    };
-    variable value times = 2000;
-    variable value hs = 0;
-    variable String json="";
-    for (i in 1..times) {
-        value visitor = StringEmitter();
-        serializer.serialize(visitor, exampleInvoice);
-        value x = visitor.string;
-        if (i == 1) {
-            json = x;
-            print(x);
-        }
-        hs+=x.hash; 
-    }
-    
-    value deserializer = Deserializer(`Invoice`, fqTypeNaming, "class");
-    for (i in 1..times) {
-        Invoice invoice = deserializer.deserialize(StreamParser(StringTokenizer(json)));
-        if (i == 1) {
-            print(invoice);
-        }
-    }
-    
-    
-    print("press enter");
-    process.readLine();
-    
-    
-    times = 8000;
-    variable value t0 = system.nanoseconds;
-    for (i in 1..times) {
-        value visitor = StringEmitter();
-        serializer.serialize(visitor, exampleInvoice);
-        value x = visitor.string;
-        if (i == 1) {
-            print(x);
-        }
-        hs+=x.hash; 
-    }
-    variable value elapsed = (system.nanoseconds - t0)/1_000_000.0;
-    print("``elapsed``ms total");
-    print("``elapsed/times``ms per serialization");
-    print(hs);
-    
-    t0 = system.nanoseconds;
-    for (i in 1..times) {
-        Invoice invoice = deserializer.deserialize(StreamParser(StringTokenizer(json)));
-        if (i == 1) {
-            print(invoice);
-        }
-    }
-    elapsed = (system.nanoseconds - t0)/1_000_000.0;
-    print("``elapsed``ms total");
-    print("``elapsed/times``ms per deserialization");
-}
