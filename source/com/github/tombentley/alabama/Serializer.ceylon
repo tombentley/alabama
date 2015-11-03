@@ -460,8 +460,13 @@ abstract class DiscriminatorOutput(Output delegate) extends DelegateOutput(deleg
        
    The type name is obtained via the given [[TypeNaming]],
 """
-class TypeAttribute(Output delegate, Visitor visitor, 
-    TypeNaming typeNaming=fqTypeNaming, String property="class") extends DiscriminatorOutput(delegate){
+class TypeAttribute(
+    Output delegate, 
+    Visitor visitor, 
+    TypeNaming typeNaming=fqTypeNaming, 
+    String property="class") 
+        extends DiscriminatorOutput(delegate) {
+    
     shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
         super.onStartObject(id, type);
         if (exists type) {
@@ -481,8 +486,13 @@ class TypeAttribute(Output delegate, Visitor visitor,
    
    The type name is obtained via the given [[TypeNaming]],
 """
-class TypeObjectWrapper(Output delegate, Visitor visitor,
-    TypeNaming typeNaming=fqTypeNaming, String property="class") extends DiscriminatorOutput(delegate){
+class TypeObjectWrapper(
+    Output delegate, 
+    Visitor visitor,
+    TypeNaming typeNaming=fqTypeNaming, 
+    String property="class") 
+        extends DiscriminatorOutput(delegate) {
+    
     shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
         if (exists type) {
             visitor.onStartObject();
@@ -507,8 +517,12 @@ class TypeObjectWrapper(Output delegate, Visitor visitor,
       
    The type name is obtained via the given [[TypeNaming]],
 """
-class TypeArrayWrapper(Output delegate, Visitor visitor,
-    TypeNaming typeNaming=fqTypeNaming) extends DiscriminatorOutput(delegate){
+class TypeArrayWrapper(
+    Output delegate, 
+    Visitor visitor,
+    TypeNaming typeNaming=fqTypeNaming) 
+        extends DiscriminatorOutput(delegate) {
+    
     shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
         if (exists type) {
             visitor.onStartArray();
@@ -533,7 +547,9 @@ abstract class IdMaker(Output delegate) extends DelegateOutput(delegate) {
          ...
       }
 """
-class PropertyIdMaker(Output delegate, Visitor visitor, String property="#") extends IdMaker(delegate){
+class PropertyIdMaker(Output delegate, Visitor visitor, String property="#") 
+        extends IdMaker(delegate) {
+    
     shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
         super.onStartObject(id, type);
         if (exists id) {
@@ -557,7 +573,9 @@ abstract class Referencer(Output delegate) extends DelegateOutput(delegate) {
          ...
       }
 """
-class AttributeReferencer(Output delegate, Visitor visitor, String prefix="@") extends Referencer(delegate){
+class AttributeReferencer(Output delegate, Visitor visitor, String prefix="@") 
+        extends Referencer(delegate) {
+    
     shared actual void onKeyReference(String key, Integer id) {
         super.onKeyReference(key, id);
         visitor.onKey(prefix + key);
