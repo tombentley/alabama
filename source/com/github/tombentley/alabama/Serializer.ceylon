@@ -32,10 +32,16 @@ import ceylon.language.serialization {
  */
 
 "A utility for serializing an instance to a JSON-formatted String."
-shared String serialize<Instance>(Instance instance, Boolean pretty = false) {
+shared String serialize<Instance>(
+    rootInstance, 
+    pretty = false) {
+    "The instance to serialize"
+    Instance rootInstance;
+    "Whether the returned JSON should be indented"
+    Boolean pretty;
     value em = StringEmitter(pretty);
     Serializer ss = Serializer();
-    ss.serialize<Instance>(em, instance);
+    ss.serialize<Instance>(em, rootInstance);
     return em.string;
 }
 
@@ -175,11 +181,16 @@ shared class Serializer(
             Type<> staticType, 
             Anything[] instance) {
         value it = iteratedType(staticType);
-        visitor.onStartArray(it, staticType);
+        value rtType = type(instance);
+        // compute sequenceType here
+        // and iteratedType from that
+        // unless it's a tuple, in which case the sequence type is irrelevant
+        // and it's only the element types which count.
+        visitor.onStartArray(staticType, rtType);
         for (Anything element in instance) {
                val(visitor, ids, it, element);
         }
-        visitor.onEndArray();
+        visitor.onEndArray(staticType, type(instance));
     }
     
     "Ceylon Arrays are serialized as JSON arrays.
@@ -190,7 +201,8 @@ shared class Serializer(
         Type<> staticType, 
         Array<out Anything> instance) {
         value it = iteratedType(staticType);
-        visitor.onStartArray(it, staticType);
+        value rtType = type(instance);
+        visitor.onStartArray(staticType, rtType);
         // XXX The question here is how to represent a reference within an array
         // As an object {"@": 42}
         // XXX Arrays are also identifiable, so how do we represent their id
@@ -209,14 +221,14 @@ shared class Serializer(
                 
             }
         }
-        visitor.onEndArray();
+        visitor.onEndArray(staticType, rtType);
     }
     
-    Integer? getId(InstanceMap<Integer> ids, Anything r) {
+    Integer getId(InstanceMap<Integer> ids, Anything r) {
         if (exists r) {
-            return ids.get(r);
+            return ids.get(r) else 0;
         } else {
-            return null;
+            return 0;
         }
     }
     
@@ -232,10 +244,24 @@ shared class Serializer(
             InstanceMap<Integer> ids, 
             Type<> modelType, 
             Object instance) {
-        value id=getId(ids, instance);
+        value id_=getId(ids, instance);
         value clazz = type(instance);
         
-        visitor.onStartObject(id, if (modelType != clazz) then clazz else null);
+        visitor.onStartObject(id_, if (modelType != clazz) then clazz else null);
+        Integer id;
+        if (id_ > 0) {
+            /* We need to track whether we've emitted this object yet
+               once we've emitted it then future occurrences are by id 
+               reference.
+               Do this by negating the id once we've emitted the instance
+             */
+            id = -id_;
+            ids.put(instance,-id_);
+            //print("Updating ``ids``");
+        } else {
+            id = id_;
+        }
+        
         if (clazz.declaration.anonymous) {
             // there's no state we care about, XXX unless it's a member!
         } else if (is Character instance) {
@@ -249,27 +275,20 @@ shared class Serializer(
                     if (exists i=ref.item , i== uninitializedLateValue) {
                         continue;
                     }
-                    value id2 = getId(ids, ref.item);
-                    Integer? byReference;
-                    if (exists id2) {
-                        if (exists id, id2 == id) {
-                            byReference = id;
-                        } else if (id2<0) {
-                            byReference = -id2;
-                        } else {
-                            byReference = null;
-                        }
+                    value refId = getId(ids, ref.item);
+                    Integer byReference;
+                    if (refId<0) {
+                        byReference = -refId;
                     } else {
-                        byReference = null;
+                        byReference = refId;
                     }
-                    if (exists byReference) {
+                    //print("``referent.attribute`` ``instance```:  ``id_`` ``id`` ``refId``");
+                    if (refId < 0) { // ref occurs > 1, but it's already been omitted
+                        //print("``referent.attribute`` by reference");
                         visitor.onKeyReference(makeKeyName(referent), byReference);
                     } else {
+                        //print("``referent.attribute`` by value");
                         visitor.onKey(makeKeyName(referent));
-                        if (exists id2, id2>0) {
-                            assert(exists r = ref.item); 
-                            ids.put(r,-id2);
-                        }
                         val(visitor, ids, attributeType(modelType, clazz, referent.attribute)?.type else `Nothing`, ref.item);
                     }
                 }
@@ -301,7 +320,7 @@ shared class Serializer(
             visitor.onString(instance.string);
         } else if (is Boolean instance) {
             visitor.onBoolean(instance);
-        } else if (is Anything[] instance) {
+        } else if (!instance is Empty|Range<out Anything>, is Anything[] instance) {
             seq(visitor, ids, staticType, instance);
         } else if (/*type(instance).declaration == `class Array`,// TODO need an isArray() in the metamodel
             // or more generally isInstanceOf(BaseType)
@@ -317,15 +336,17 @@ shared class Serializer(
     shared void serialize<Instance>(Visitor visitor, Instance instance) {
         // visit the graph assigning ids to things that can't be included 
         // by nesting
+        // TODO allow skipping this if caller promises instance graph is not cyclic?
         value ids = assignedIds(instance);
+        //print(ids);
         // TODO The Discriminator, IdMaker etc might be different for different classes.
-        variable Output output = VisitorOutput(visitor);
+        Output output = Output(visitor);
         // add decorators to the output which will add ids (using # key)...
-        output = PropertyIdMaker(output, visitor);
+        //output = PropertyIdMaker(output, visitor);
         // ...and @type keys...
-        output = TypeAttribute(output, visitor);
+        //output = TypeAttribute(output, visitor);
         // ... and @foo keys for things in cycles
-        output = AttributeReferencer(output, visitor);
+        //output = AttributeReferencer(output, visitor);
         val(output, ids, typeLiteral<Instance>(), instance);
     }
 }
@@ -343,242 +364,128 @@ shared class Serializer(
      [ {"@": 2} ] // an array with a reference element (embedded). Must be a reference because no normal object contains a "@" key
      */
 
-shared interface Output {
-    shared formal void onStartObject(Integer? id, ClassModel<>? type);
-    shared formal void onKeyReference(String key, Integer id);
-    shared formal void onKey(String key);
-    shared formal void onEndObject(Integer? id, ClassModel<>? type);
-    shared formal void onStartArray(Type<> staticType, Type<> iteratedType);
-    shared formal void onEndArray();
-    shared formal void onString(String string);
-    shared formal void onNumber(Integer|Float number);
-    shared formal void onBoolean(Boolean boolean);
-    shared formal void onNull();
+abstract class TypeInfo() {
+    shared default void beforeStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
+    shared default void afterStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
+    shared default void beforeEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
+    shared default void afterEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
 }
-"Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
- [[Output]]."
-class VisitorOutput(Visitor visitor) satisfies Output {
-    shared actual default void onBoolean(Boolean boolean) {
-        visitor.onBoolean(boolean);
-    }
-    
-    shared actual default void onEndArray() {
-        visitor.onEndArray();
-    }
-    
-    shared actual default void onEndObject(Integer? id, ClassModel<>? type) {
-        visitor.onEndObject();
-    }
-    
-    shared actual default void onKey(String key) {
-        visitor.onKey(key);
-    }
-    
-    shared actual default void onKeyReference(String key, Integer id) {
-        //visitor.onKey(key);
-    }
-    
-    shared actual default void onNull() {
-        visitor.onNull();
-    }
-    
-    shared actual default void onNumber(Integer|Float number) {
-        visitor.onNumber(number);
-    }
-    
-    shared actual default void onStartArray(Type<> staticType, Type<Anything> iteratedType) {
-        visitor.onStartArray();
-        // XXX note we sometimes only care about the base type
-        // e.g. with [1, ""] we might only care that the base type is Array, or
-        // Tuple, and be happy to figure out the element types on the fly.
-    }
-    
-    shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
-        visitor.onStartObject();
-    }
-    
-    shared actual default void onString(String string) {
-        visitor.onString(string);
-    }
-}
-abstract class DelegateOutput(delegate) satisfies Output {
-    shared Output delegate;
-    shared actual default void onBoolean(Boolean boolean) {
-        delegate.onBoolean(boolean);
-    }
-    
-    shared actual default void onEndArray() {
-        delegate.onEndArray();
-    }
-    
-    shared actual default void onEndObject(Integer? id, ClassModel<>? type) {
-        delegate.onEndObject(id, type);
-    }
-    
-    shared actual default void onKey(String key) {
-        delegate.onKey(key);
-    }
-    
-    shared actual default void onNull() {
-        delegate.onNull();
-    }
-    
-    shared actual default void onNumber(Integer|Float number) {
-        delegate.onNumber(number);
-    }
-    
-    shared actual default void onStartArray(Type<> staticType, Type<Anything> iteratedType) {
-        delegate.onStartArray(staticType, iteratedType);
-    }
-    
-    shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
-        delegate.onStartObject(id, type);
-    }
-    
-    shared actual default void onString(String string) {
-        delegate.onString(string);
-    }
-    shared actual default void onKeyReference(String key, Integer id) {}
-    
-}
-
-"Baseclass for things which augment output with type information."
-abstract class DiscriminatorOutput(Output delegate) extends DelegateOutput(delegate) {
-    
-}
-// There's a discriminator that just assumes the attribute names are sufficient to identify the type
-
-
-
-"""Adds type information by embedding the type name as a property of the JSON 
-   object:
-   
-       {
-           "class": "Person",
-           ...
-       }
-       
-   The type name is obtained via the given [[TypeNaming]],
-"""
-class TypeAttribute(
-    Output delegate, 
-    Visitor visitor, 
-    TypeNaming typeNaming=fqTypeNaming, 
-    String property="class") 
-        extends DiscriminatorOutput(delegate) {
-    
-    shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
-        super.onStartObject(id, type);
+object noTypeInfo extends TypeInfo() {}
+class InlineAttributeTypeInfo(String typeKey="class") extends TypeInfo() {
+    shared actual void afterStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
         if (exists type) {
-            visitor.onKey(property);
+            visitor.onKey(typeKey);
             visitor.onString(typeNaming.name(type));
         }
     }
 }
-"""Adds type information by wrapping the value in an object with one item 
-   to record the type name and another item to encode the 
-   value itself:
-   
-       {
-           "class": "Person", 
-           "value": ...
-       }
-   
-   The type name is obtained via the given [[TypeNaming]],
-"""
-class TypeObjectWrapper(
-    Output delegate, 
-    Visitor visitor,
-    TypeNaming typeNaming=fqTypeNaming, 
-    String property="class") 
-        extends DiscriminatorOutput(delegate) {
-    
-    shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
+class WrapperObjectTypeInfo(String typeKey="class", String valueKey="value") extends TypeInfo() {
+    shared actual void beforeStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
         if (exists type) {
             visitor.onStartObject();
-            visitor.onKey(property);
+            visitor.onKey(typeKey);
             visitor.onString(typeNaming.name(type));
-            visitor.onKey("value");
+            visitor.onKey(valueKey);
         }
-        super.onStartObject(id, type);
+    }
+    shared actual void afterEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
         if (exists type) {
             visitor.onEndObject();
         }
     }
 }
-
-"""Adds type information by wrapping the value in an array whose first element 
-   is a String representation of the type and whose second element is the 
-   value itself:
-   
-       ["Person", {
-           ...
-       }]
-      
-   The type name is obtained via the given [[TypeNaming]],
-"""
-class TypeArrayWrapper(
-    Output delegate, 
-    Visitor visitor,
-    TypeNaming typeNaming=fqTypeNaming) 
-        extends DiscriminatorOutput(delegate) {
-    
-    shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
+object wrapperArrayTypeInfo extends TypeInfo() {
+    shared actual void beforeStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
         if (exists type) {
             visitor.onStartArray();
             visitor.onString(typeNaming.name(type));
         }
-        super.onStartObject(id, type);
+    }
+    shared actual void afterEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
         if (exists type) {
             visitor.onEndArray();
         }
     }
 }
 
-"Baseclass for things which augment output adding *identifiers* to those values that need them"
-abstract class IdMaker(Output delegate) extends DelegateOutput(delegate) {
+"Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
+ [[Output]]."
+class Output(Visitor visitor,
+    TypeNaming typeNaming=fqTypeNaming, 
+    String idKey="#",
+    String idReferencePrefix="@",
+    TypeInfo typeInfo=InlineAttributeTypeInfo()) {
     
-}
-// There's an IdMaker that just assumes the some subset of keys are a primary key
-"""Add an identifier to an object using the key `"#"`, for example
-   
-      {
-         "#":42,
-         ...
-      }
-"""
-class PropertyIdMaker(Output delegate, Visitor visitor, String property="#") 
-        extends IdMaker(delegate) {
+    shared default void onBoolean(Boolean boolean) {
+        visitor.onBoolean(boolean);
+    }
     
-    shared actual default void onStartObject(Integer? id, ClassModel<>? type) {
-        super.onStartObject(id, type);
-        if (exists id) {
-            visitor.onKey(property);
+    shared default void onStartObject(Integer id, ClassModel<>? type) {
+        typeInfo.beforeStartObject(typeNaming, type, visitor);
+        visitor.onStartObject();
+        if (id != 0) {
+            visitor.onKey(idKey);
             visitor.onNumber(id);
         }
+        typeInfo.afterStartObject(typeNaming, type, visitor);
     }
-}
-
-
-"Baseclass for things which augment output of references"
-abstract class Referencer(Output delegate) extends DelegateOutput(delegate) {
     
-}
-
-"""Uses an `"@key"` attribute to reference another value which cannot be 
-   nested (preumably due to a cycle).
-   
-      {
-         "@referred":42,
-         ...
-      }
-"""
-class AttributeReferencer(Output delegate, Visitor visitor, String prefix="@") 
-        extends Referencer(delegate) {
+    shared default void onEndObject(Integer? id, ClassModel<>? type) {
+        typeInfo.beforeEndObject(typeNaming, type, visitor);
+        visitor.onEndObject();
+        typeInfo.afterEndObject(typeNaming, type, visitor);
+    }
     
-    shared actual void onKeyReference(String key, Integer id) {
-        super.onKeyReference(key, id);
-        visitor.onKey(prefix + key);
+    shared default void onKey(String key) {
+        visitor.onKey(key);
+    }
+    
+    shared default void onKeyReference(String key, Integer id) {
+        visitor.onKey(idReferencePrefix+ key);
         visitor.onNumber(id);
+    }
+    
+    shared default void onNull() {
+        visitor.onNull();
+    }
+    
+    shared default void onNumber(Integer|Float number) {
+        visitor.onNumber(number);
+    }
+    
+    shared default void onStartArray(Type<> staticType, Type<> rtType) {
+        if (is ClassModel<> staticType, 
+            staticType.declaration != `class Array`,
+            staticType.declaration != `class Tuple`,
+            staticType != rtType) {
+            WrapperObjectTypeInfo().beforeStartObject(typeNaming, rtType, visitor);
+        }
+        visitor.onStartArray();
+        if (is ClassModel<> staticType, 
+            staticType.declaration != `class Array`,
+            staticType != rtType) {
+            WrapperObjectTypeInfo().afterStartObject(typeNaming, rtType, visitor);
+        }
+        // XXX note we sometimes only care about the base type
+        // e.g. with [1, ""] we might only care that the base type is Array, or
+        // Tuple, and be happy to figure out the element types on the fly.
+    }
+    
+    shared default void onEndArray(Type<> staticType, Type<> rtType) {
+        if (is ClassModel<> staticType, 
+            staticType.declaration != `class Array`,
+            staticType != rtType) {
+            WrapperObjectTypeInfo().beforeEndObject(typeNaming, rtType, visitor);
+        }
+        visitor.onEndArray();
+        if (is ClassModel<> staticType, 
+            staticType.declaration != `class Array`,
+            staticType != rtType) {
+            WrapperObjectTypeInfo().afterEndObject(typeNaming, rtType, visitor);
+        }
+    }
+    
+    shared default void onString(String string) {
+        visitor.onString(string);
     }
 }

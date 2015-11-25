@@ -405,7 +405,7 @@ Type<Anything> iteratedType(Type<Anything> containerType) {
 
 "Figure out the type of the attribute of the given name that's a member of
  modelType or jsonType"
-Attribute? attributeType(Type<> modelType, Type<> jsonType, ValueDeclaration attribute) {
+Attribute<>? attributeType(Type<> modelType, Type<> jsonType, ValueDeclaration attribute) {
     Type<> type;
     if (!jsonType.exactly(`Nothing`)) {
         type = jsonType;
