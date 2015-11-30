@@ -6,3 +6,6 @@ encoding=UTF-8
 source=source
 source=test
 resource=resource
+
+[formattool]
+profile=default
