@@ -274,7 +274,8 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         }
         case (is Boolean) {
             stream.next();
-            if (modelType.supertypeOf(`Boolean`)) {
+            if (modelType.supertypeOf(`true`.type)
+                || modelType.supertypeOf(`false`.type)) {
                 //print("val(modelType=``modelType``): ``item``");
                 value n = nextId();
                 dc.instanceValue(n, item);
@@ -284,7 +285,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         }
         case (is Null) {
             stream.next();
-            if (modelType.supertypeOf(`Null`)) {
+            if (modelType.supertypeOf(`null`.type)) {
                 //print("val(modelType=``modelType``): null");
                 value n = nextId();
                 dc.instanceValue(n, item);
