@@ -14,7 +14,8 @@ import com.github.tombentley.alabama {
     ignoredKeys
 }
 import ceylon.language.meta {
-    type
+    type,
+    typeLiteral
 }
 
 test
@@ -210,6 +211,7 @@ shared void serializeNull() {
 
 serializable class Generic<Element>(element) {
     shared Element element;
+    shared actual String string => "Generic<``typeLiteral<Element>()``>(``element else "null"``)";
 }
 test
 shared void serializeGeneric() {
@@ -344,9 +346,50 @@ Invoice exampleInvoice => Invoice {
 
 test 
 shared void s11nSerialize() {
-    print(serialize(exampleInvoice, true));
-    "needs assertions"
-    assert(false);
+    assertEquals{actual= serialize(exampleInvoice, true);
+        expected =  """{
+                        "bill": {
+                         "name": "Mr Pig",
+                         "address": {
+                          "lines": [
+                           "3 Pigs House",
+                           "The Farm"
+                          ],
+                          "postCode": "3PH"
+                         }
+                        },
+                        "deliver": {
+                         "name": "Mr Pig",
+                         "address": {
+                          "lines": [
+                           "3 Pigs House",
+                           "The Farm"
+                          ],
+                          "postCode": "3PH"
+                         }
+                        },
+                        "items": [
+                         {
+                          "product": {
+                           "sku": "123",
+                           "description": "Bag of sand",
+                           "unitPrice": 2.34,
+                           "salesTaxRate": 0.2
+                          },
+                          "quantity": 4.0
+                         },
+                         {
+                          "product": {
+                           "sku": "876",
+                           "description": "Bag of cement",
+                           "unitPrice": 3.57,
+                           "salesTaxRate": 0.2
+                          },
+                          "quantity": 1.0
+                         }
+                        ]
+                       }""";
+    };
 }
 
 abstract serializable class AttributeCollision(collides) {
@@ -435,25 +478,99 @@ shared void serEmpty() {
 }
 
 test
-shared void serTuple() {
-    Object instance = [1, "2", true];
-    if (!instance is Empty|Range<out Anything>, is Anything[] instance) {
-        print(true);
-    }
-    assertEquals(serialize([1, "2", true], false),"""[1,"2",true]""");
-    assertEquals(serialize([Generic("S")], false),"""[{"element":"S"}]""");
-    assertEquals(serialize(Generic([1, "2", true]), false), """{"element":[1,"2",true]}""");
+shared void rtTuple() {
+    value tuple1 = [1, "2", true];
+    variable value json = serialize(tuple1, false);
+    assertEquals(json, """[1,"2",true]""");
+    assertEquals {
+        actual = deserialize<[Integer, String, Boolean]>(json);  
+        expected = tuple1; 
+    };
     
-    assertEquals(serialize<Object>([1, "2", true], false),"""{"class":"Tuple","value":[1,"2",true]}""");
-    assertEquals(serialize<Object>([Generic("S")], false),"""{"class":Generic","value":[{"element":"S"}]}""");
-    assertEquals(serialize<Object>(Generic([1, "2", true]), false), """{"class":"Generic<Tuple<>>","element":[1,"2",true]}""");
+    json = serialize([Generic("S")], false);
+    assertEquals(json, """[{"element":"S"}]""");
+    assertEquals { 
+        actual = deserialize<[Generic<String>]>(json)[0].element; 
+        expected = "S"; 
+    };
+    
+    json = serialize(Generic(tuple1), false);
+    assertEquals(json, """{"element":[1,"2",true]}""");
+    assertEquals { 
+        actual = deserialize<Generic<[Integer, String, Boolean]>>(json).element; 
+        expected = tuple1;
+    };
+    
+    // TODO support tuple type abbrevs
+    // tests where the deserializer doesn't know the expected type
+    json = serialize<Object>(tuple1, false);
+    assertEquals(json, """{"class":"ceylon.language::Tuple<ceylon.language::true|ceylon.language::String|ceylon.language::Integer,ceylon.language::Integer,ceylon.language::Tuple<ceylon.language::true|ceylon.language::String,ceylon.language::String,ceylon.language::Tuple<ceylon.language::true,ceylon.language::true,ceylon.language::empty>>>","value":[1,"2",true]}""");
+    assertEquals { 
+        actual = deserialize<Object>(json); 
+        expected = tuple1; 
+    };
+    
+    json = serialize<Object>([Generic("S")], false);
+    assertEquals(json, """{"class":"ceylon.language::Tuple<test.com.github.tombentley.alabama::Generic<ceylon.language::String>,test.com.github.tombentley.alabama::Generic<ceylon.language::String>,ceylon.language::empty>","value":[{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::String>","element":"S"}]}""");
+    assert(is [Generic<String>] got = deserialize<Object>(json));
+    assertEquals { 
+        actual = got[0].element; 
+        expected = "S"; 
+    };
+    
+    json = serialize<Object>(Generic(tuple1), false);
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean,ceylon.language::Integer,ceylon.language::Tuple<ceylon.language::String|ceylon.language::Boolean,ceylon.language::String,ceylon.language::Tuple<ceylon.language::Boolean,ceylon.language::Boolean,ceylon.language::Empty>>>>","element":[1,"2",true]}""");
+    assert(is Generic<[Integer, String, Boolean]> got2 = deserialize<Object>(json));
+    assertEquals { 
+        actual = got2.element; 
+        expected = tuple1; 
+    };
 }
 test
-shared void serTupleWithRest() {
-    print(serialize([1, "2", true, *(0..100)], true));
-    print(serialize(Generic([1, "2", true, *(0..100)]), true));
-    "needs assetions"
-    assert(false);
+shared void rtTupleWithRest() {
+    value tuple = [1, "2", true, *(4..6)];
+    variable value json = serialize(tuple, true);
+    assertEquals{
+        expected = """[
+                       1,
+                       "2",
+                       true,
+                       4,
+                       5,
+                       6
+                      ]""";
+        actual = json;
+    };
+    value got1 = deserialize<[Integer|String|Boolean*]>(json);
+    assertEquals{
+        expected = tuple;
+        actual = got1;
+    };
+    
+    // TODO In this case all I actually need to know from the wrapper class
+    // is that the JSON array is a Tuple (I don't need the tuple instantiation)
+    // because the reification of tuple uses the runtime types
+    json = serialize(tuple of Object, true);
+    assertEquals{
+        expected = """{
+                       "class": "ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::String|ceylon.language::true,ceylon.language::Integer,ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::String|ceylon.language::true,ceylon.language::String,ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::true,ceylon.language::true,ceylon.language::Span<ceylon.language::Integer>>>>",
+                       "value": [
+                        1,
+                        "2",
+                        true,
+                        4,
+                        5,
+                        6
+                       ]
+                      }""";
+        actual = json;
+    };
+    value got2 = deserialize<Object>(json);
+    assertEquals{
+        expected = tuple;
+        actual = got2;
+    };
+    
 }
 
 test
@@ -473,12 +590,17 @@ shared void serArray() {
 }
 
 test
-shared void serArraySequence() {
-    assertEquals(serialize(Array{1, "2", true}.sequence()), """[1,"2",true]""");
-    assertEquals(serialize(Generic(Array{1, "2", true}.sequence())), """{"element":[1,"2",true]}""");
+shared void rtArraySequence() {
+    assert(is ArraySequence<Anything> as = (Array{1, "2", true}.sequence() of Object));
+    variable value json = serialize(as);
+    assertEquals(json, """[1,"2",true]""");
+    assert(is ArraySequence<Anything> as2 = deserialize<Anything>(json));
+    assert(as2 == as);
     
-    "needs assertions for static types Object, Sequence"
-    assert(false);
+    json = serialize(Generic(as));
+    assertEquals(json, """{"element":[1,"2",true]}""");
+    value as3 = deserialize<Generic<ArraySequence<Anything>>>(json);
+    assert(as3.element == as);
 }
 
 test
@@ -695,11 +817,11 @@ shared void rtGenericCharacter() {
 test
 shared void rtGenericEmpty() {
     variable String json = serialize(Generic([] of String[]));
-    assertEquals(json, """{"element":[]}""");
+    assertEquals(json, """{"element":{"class":"ceylon.language::empty"}}""");
     assertEquals(deserialize<Generic<String[]>>(json).element, []);
     
     json = serialize(Generic([] of String[]) of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Sequential<ceylon.language::String>>","element":[]}""");
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Sequential<ceylon.language::String>>","element":{"class":"ceylon.language::empty"}}""");
     assert(is Generic<String[]> o = deserialize<Object>(json));
     assertEquals(o.element, []);
 }
