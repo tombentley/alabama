@@ -87,16 +87,53 @@ interface ContainerBuilder<Id>
         Type<> modelHint);
 }
 
+"Utility for building `Sequential`s by repeatedly 
+ calling [[SequenceBuilder.addElement]] and finally 
+ [[SequenceBuilder.instantiate]]. 
+ We don't know the sequence type until the end."
 class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
         satisfies ContainerBuilder<Id> 
         given Id satisfies Object {
     Id id;
     ArrayList<Id> elements = ArrayList<Id>(); 
-    variable Type<Anything> iteratedType = `Nothing`;
+    ArrayList<Type> elementTypes = ArrayList<Type>();
+    
+    "Is the given `Type` reflecting a `Tuple`?"
+    function isTuple(Type<> type) {
+        if (is Class<> type, type.declaration.qualifiedName.startsWith("ceylon.language::Tuple")) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
     shared actual void addElement(Type<> elementType, Id elementId) {
         elements.add(elementId);
-        iteratedType = elementType.union(iteratedType);
+        elementTypes.add(elementType);
     }
+    function instantiateTuple() {
+        variable Id restId = nextId();
+        variable ClassModel<> restType = type(empty);
+        variable Type<Anything> iteratedType = `Nothing`;
+        dc.instanceValue(restId, []); //instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
+        variable Id eid;
+        variable value ii = elements.size-1;
+        while (ii >= 0) {
+                assert(exists e = elements[ii]);
+                assert(exists et = elementTypes[ii]);
+                eid = if (ii == 0) then id else nextId();
+                iteratedType = et.union(iteratedType);
+                value etype = `class Tuple`.classApply<Anything>(iteratedType, et, restType);
+                dc.instance(eid, etype);
+                dc.attribute(eid, `value Tuple.first`, e);
+                dc.attribute(eid, `value Tuple.rest`, restId);
+                restId = eid;
+                restType = etype;
+                ii--;
+            }
+        return id->restType;
+    }
+    
     shared actual Id->ClassModel<> instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint) {
@@ -106,12 +143,19 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
             return id->type([]);
         } else if (elements.size == 1,
             modelHint.subtypeOf(`Singleton<Anything>`)) {
+            assert(exists iteratedType = elementTypes[0]);
             value singletonType = `class Singleton`.classApply<Anything,Nothing>(iteratedType);
             dc.instance(id, singletonType);
             assert(exists elementId = elements.first);
             dc.attribute(id, `class Singleton`.getDeclaredMemberDeclaration<ValueDeclaration>("element") else nothing, elementId);
             return id->singletonType;
-        }else {
+        } else if (isTuple(modelHint)) {
+            return instantiateTuple();
+        } else { 
+            variable Type<Anything> iteratedType = `Nothing`;
+            for (et in elementTypes) {
+                iteratedType = et.union(iteratedType);
+            }
             // Use an array sequence
             Id arrayId = nextId();
             dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
