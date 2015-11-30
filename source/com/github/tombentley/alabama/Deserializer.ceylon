@@ -392,19 +392,26 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     byRef = false;
                     keyName = jsonKey;
                 }
-                if (jsonKey in config.clazz(clazz.declaration).ignoredKeys) {
-                    // TODO need to ignore the whole subtree
-                    // TODO is ignoredKeys inherited? 
-                    
-                } else if (exists ac=config.resolveKey(clazz, keyName)){
-                    // TODO lots to do here.
-                    //Why we passing modelType and dataType to attributeType
-                    //When we already decided to instantiate a clazz?
-                    //Why it called attributeType when it returns an Attribute?
-                    attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), ac.attr);
-                }
-                if (!attribute exists) {
-                    throw Exception("Couldn't find attribute for key '``jsonKey``' on ``clazz``");
+                if (jsonKey == "value") {// it's a wrapper object
+                    value wrapped = val(clazz);
+                    assert(stream.next() is ObjectEndEvent);
+                    return wrapped;
+                } else {
+                    // The JSON object represents a `serializable` instance
+                    if (jsonKey in config.clazz(clazz.declaration).ignoredKeys) {
+                        // TODO need to ignore the whole subtree
+                        // TODO is ignoredKeys inherited? 
+                        
+                    } else if (exists ac=config.resolveKey(clazz, keyName)){
+                        // TODO lots to do here.
+                        //Why we passing modelType and dataType to attributeType
+                        //When we already decided to instantiate a clazz?
+                        //Why it called attributeType when it returns an Attribute?
+                        attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), ac.attr);
+                    }
+                    if (!attribute exists) {
+                        throw Exception("Couldn't find attribute for key '``jsonKey``' on ``clazz``");
+                    }
                 }
             }
             case (is String|Integer|Float|Boolean|Null) {
