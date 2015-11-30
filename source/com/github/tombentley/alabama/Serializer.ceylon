@@ -192,7 +192,7 @@ shared class Serializer(
         for (Anything element in instance) {
                val(visitor, ids, it, element);
         }
-        visitor.onEndArray(staticType, type(instance));
+        visitor.onEndArray(staticType, rtType);
     }
     
     "Ceylon Arrays are serialized as JSON arrays.
