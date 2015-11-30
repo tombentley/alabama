@@ -456,17 +456,20 @@ class Output(Visitor visitor,
     }
     
     shared default void onStartArray(Type<> staticType, Type<> rtType) {
+        WrapperObjectTypeInfo? w;
         if (is ClassModel<> staticType, 
             staticType.declaration != `class Array`,
             staticType.declaration != `class Tuple`,
             staticType != rtType) {
-            WrapperObjectTypeInfo().beforeStartObject(typeNaming, rtType, visitor);
+            value w1 = WrapperObjectTypeInfo();
+            w1.beforeStartObject(typeNaming, rtType, visitor);
+            w=w1;
+        } else {
+            w = null;
         }
         visitor.onStartArray();
-        if (is ClassModel<> staticType, 
-            staticType.declaration != `class Array`,
-            staticType != rtType) {
-            WrapperObjectTypeInfo().afterStartObject(typeNaming, rtType, visitor);
+        if (exists w) {
+            w.afterStartObject(typeNaming, rtType, visitor);
         }
         // XXX note we sometimes only care about the base type
         // e.g. with [1, ""] we might only care that the base type is Array, or
@@ -474,16 +477,20 @@ class Output(Visitor visitor,
     }
     
     shared default void onEndArray(Type<> staticType, Type<> rtType) {
+        WrapperObjectTypeInfo? w;
         if (is ClassModel<> staticType, 
             staticType.declaration != `class Array`,
+            staticType.declaration != `class Tuple`,
             staticType != rtType) {
-            WrapperObjectTypeInfo().beforeEndObject(typeNaming, rtType, visitor);
+            value w1 = WrapperObjectTypeInfo();
+            w1.beforeEndObject(typeNaming, rtType, visitor);
+            w=w1;
+        } else {
+            w = null;
         }
         visitor.onEndArray();
-        if (is ClassModel<> staticType, 
-            staticType.declaration != `class Array`,
-            staticType != rtType) {
-            WrapperObjectTypeInfo().afterEndObject(typeNaming, rtType, visitor);
+        if (exists w) {
+            w.afterEndObject(typeNaming, rtType, visitor);
         }
     }
     
