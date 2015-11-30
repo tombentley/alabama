@@ -444,12 +444,15 @@ Class<Object> bestType(Type<> modelType, Type<> keyType) {
  iterated type or returns null if the given Type does not reflect an Iterable"
 by("jvasileff")
 Type<Anything> iteratedType(Type<Anything> containerType) {
-    if (is ClassOrInterface<Anything> containerType,
-        exists model = containerType.satisfiedTypes
+    if (is ClassOrInterface<Anything> containerType) {
+        if (exists model = containerType.satisfiedTypes
                 .narrow<Interface<Iterable<Anything>>>().first,
-        exists x = model.typeArgumentList.first) {
-        //print("iteratedType(containerType=``containerType``): ``x``");
-        return x;
+            exists x = model.typeArgumentList.first) {
+            //print("iteratedType(containerType=``containerType``): ``x``");
+            return x;
+        } else if (containerType.supertypeOf(`Iterable<Anything>`)) {
+            return `Anything`;
+        }
     }
     
     return `Nothing`;
