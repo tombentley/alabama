@@ -123,6 +123,7 @@ class InstanceMap<Item>()
 see(`function serialize`)
 shared class Serializer(
     Config config = Config()) {
+    Integer singleReference = -1;
     
     SerializationContext sc = serialization();
     
@@ -147,13 +148,13 @@ shared class Serializer(
         // TODO configurable two cases: generate id when it's a graph (i.e. copy subtrees)
         // OR generate id when it's a **cyclic** graph
         Integer count;
-        if (exists c = counts.get(root), c == -1) {
+        if (exists c = counts.get(root), c == singleReference) {
             count = idGenerator.next();// referenced more than once, give it an id
         } else {
-            count = -1;
+            count = singleReference;
         }
         counts.put(root, count);
-        if (count == -1 // not yet visited
+        if (count == singleReference // not yet visited
                 //&& !(root is String|Character|Integer|Boolean|Float|Null)
                 && classDeclaration(root).serializable) {
             //assume it's serializable
@@ -164,9 +165,10 @@ shared class Serializer(
                     // Tuple is not Identifiable and because it outputs as [1,2] we can't easily add a # key for an id
                     // so by not assigning it an id we include each occurrence of a tuple as a subtree
                     // even if it's just a single instance!
-                    if (exists c = counts.get(referred),
-                        c == -1) {
-                        counts.put(referred, idGenerator.next());
+                    if (exists c = counts.get(referred)) {
+                        if (c == singleReference) {
+                            counts.put(referred, idGenerator.next());
+                        }
                     } else {
                         assignedIdsInternal(idGenerator, referred, counts);
                     }
