@@ -377,7 +377,7 @@ class Output(Visitor jsonVisitor,
         return inObject;
     }
     
-    State idWrapper(State state, String idKey, Integer id) {
+    State idWrapper(State state, Integer id) {
         if (state != inObject) {
             jsonVisitor.onStartObject();
         }
@@ -453,10 +453,8 @@ class Output(Visitor jsonVisitor,
         if (exists type) {
             s2 = typeWrapper(s2, type);
         }
-        
         if (id != 0) {
-            jsonVisitor.onKey(idKey);
-            jsonVisitor.onNumber(id);
+            s2 = idWrapper(s2, id);
         }
         return s2;
     }
