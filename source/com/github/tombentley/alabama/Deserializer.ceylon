@@ -223,11 +223,11 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
     
     shared Instance deserialize(Iterator<BasicEvent>&Positioned input) {
         this.input = PeekIterator(input);
-        return dc.reconstruct<Instance>(val(clazz).key);
+        return dc.reconstruct<Instance>(val(false, clazz).key);
     }
     
     "Peek at the next event in the stream and return the instance for it"
-    Integer->ClassModel<> val(Type<> modelType) {
+    Integer->ClassModel<> val(Boolean wrapper, Type<> modelType) {
         //print("val(modelType=``modelType``)");
         switch (item=stream.peek)
         case (is ObjectStartEvent) {
@@ -249,6 +249,19 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 value n = nextId();
                 dc.instanceValue(n, item.first);
                 return n->`Character`;
+            } else if (wrapper 
+                && modelType.supertypeOf(`Float`)) {
+                value n = nextId();
+                if (item == "Infinity") {
+                    dc.instanceValue(n, infinity);
+                    return n->`Float`;
+                } else if (item == "-Infinity") {
+                    dc.instanceValue(n, -infinity);
+                    return n->`Float`;
+                } else if (item == "NaN") {
+                    dc.instanceValue(n, 0.0/0.0);
+                    return n->`Float`;
+                }
             }
             throw Exception("JSON String \"``item``\" cannot be coerced to ``modelType``");
         }
@@ -310,7 +323,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             switch(item=stream.peek)
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
                 // TODO val knows the type of the thing it's creating, so we should use that as the et
-                value xx = val(iteratedType(modelType));
+                value xx = val(false, iteratedType(modelType));
                 builder.addElement(xx.item, xx.key);
             }
             case (is ArrayEndEvent) {
@@ -326,10 +339,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         }
     }
     
-    "Consume the next object from the [[stream]] and return the instance for it"
-    Integer->ClassModel<> obj(Type<> modelType) {
-        //print("obj(modelType=``modelType``)");
-        assert(stream.next() is ObjectStartEvent);// consume initial {
+    function peekClass() {
         Type<> dataType;
         if (exists typeNaming, exists typeProperty) {
             // We ought to use any @type information we can obtain 
@@ -353,8 +363,51 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         } else {
             dataType = `Nothing`;
         }
+        return dataType;
+    }
+    
+    function peekId() {
+        Integer? id;
+        if (is KeyEvent k = stream.peek,
+            k.key == "#") {
+            stream.next();//consume @type
+            switch (idProperty = stream.next()) 
+            case (is Integer){
+                id = idProperty;
+            }
+            else {
+                throw;
+            }
+        } else {
+            id = null;
+        }
+        return id;
+    }
+    
+    function peekValue() {
+        if (is KeyEvent k = stream.peek,
+            k.key == "value") {
+            stream.next();//consume @type
+            return true;
+        }
+        return false;
+    }
+    
+    "Consume the next object from the [[stream]] and return the instance for it"
+    Integer->ClassModel<> obj(Type<> modelType) {
+        //print("obj(modelType=``modelType``)");
+        assert(stream.next() is ObjectStartEvent);// consume initial {
+        value dataType=peekClass();
+        value id = peekId() else nextId();
+        value isValue = peekValue();
+        
         Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
-        Builder<Integer> builder = Builder<Integer>(dc, clazz, nextId());// TODO reuse a single instance?
+        if (isValue) {
+            value result = val(true, clazz);
+            stream.next();// consume the end of the wrapper object
+            return result;
+        }
+        Builder<Integer> builder = Builder<Integer>(dc, clazz, id);// TODO reuse a single instance?
         variable Attribute<>? attribute = null;
         variable Boolean byRef = false;
         while(true) {
@@ -392,11 +445,11 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     byRef = false;
                     keyName = jsonKey;
                 }
-                if (jsonKey == "value") {// it's a wrapper object
-                    value wrapped = val(clazz);
+                /*if (jsonKey == "value") {// it's a wrapper object
+                    value wrapped = val(false, clazz);
                     assert(stream.next() is ObjectEndEvent);
                     return wrapped;
-                } else {
+                } else {*/
                     // The JSON object represents a `serializable` instance
                     if (jsonKey in config.clazz(clazz.declaration).ignoredKeys) {
                         // TODO need to ignore the whole subtree
@@ -412,14 +465,14 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     if (!attribute exists) {
                         throw Exception("Couldn't find attribute for key '``jsonKey``' on ``clazz``");
                     }
-                }
+                //}
             }
             case (is String|Integer|Float|Boolean|Null) {
                 assert(exists attr=attribute);
                 if (byRef, is Integer item) {
                     builder.bindAttribute(attr, item);
                 } else {
-                    builder.bindAttribute(attr, val(attr.type).key);
+                    builder.bindAttribute(attr, val(false, attr.type).key);
                 }
                 attribute = null;
             }

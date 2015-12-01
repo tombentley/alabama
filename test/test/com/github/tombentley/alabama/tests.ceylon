@@ -712,11 +712,11 @@ test
 shared void rtNaN() {
     variable String json = serialize(0.0/0.0);
     assertEquals(json, """{"value":"NaN"}""");
-    //value got = deserialize<Float>(json);
-    //assertTrue(got.undefined);
+    assertTrue(deserialize<Float>(json).undefined);
     
     json = serialize<Object>(0.0/0.0);
     assertEquals(json, """{"class":"ceylon.language::Float","value":"NaN"}""");
+    assertTrue(deserialize<Float>(json).undefined);
 }
 
 test
@@ -724,19 +724,19 @@ shared void rtInfinity() {
     value infinity = 1.0/0.0;
     variable String json = serialize(infinity);
     assertEquals(json, """{"value":"Infinity"}""");
-    // TODO assertEquals(deserialize<Float>(json), infinity);
+    assertEquals(deserialize<Float>(json), infinity);
     
     json = serialize<Object>(infinity);
     assertEquals(json, """{"class":"ceylon.language::Float","value":"Infinity"}""");
-    // TODO assertEquals(deserialize<Float>(json), infinity);
+    assertEquals(deserialize<Float>(json), infinity);
     
     json = serialize(-infinity);
     assertEquals(json, """{"value":"-Infinity"}""");
-    // TODO assertEquals(deserialize<Float>(json), -infinity);
+    assertEquals(deserialize<Float>(json), -infinity);
     
     json = serialize<Object>(-infinity);
     assertEquals(json, """{"class":"ceylon.language::Float","value":"-Infinity"}""");
-    // TODO assertEquals(deserialize<Float>(json), -infinity);
+    assertEquals(deserialize<Float>(json), -infinity);
     
 }
 
