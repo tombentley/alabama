@@ -272,9 +272,6 @@ shared class Serializer(
         
         if (clazz.declaration.anonymous) {
             // there's no state we care about, XXX unless it's a member!
-        } else if (is Character instance) {
-            visitor.onKey("character");
-            visitor.onString(instance.string);
         } else {//serializable, hopefully
             for (ref in sc.references(instance)) {
                 value referent = ref.key;
