@@ -4,6 +4,9 @@ import ceylon.language.meta.model {
 import ceylon.collection {
     HashMap
 }
+import com.github.tombentley.typeparser {
+    parseType
+}
 """A contract for obtaining a [[Type]] from the value of a 
    "@type" property in the JSON data being deserialized.
    """
@@ -16,7 +19,14 @@ shared interface TypeNaming {
    attribute in the JSON hash whose value is the fully 
    qualified type name."""
 shared object fqTypeNaming satisfies TypeNaming {
-    shared actual Type<> type(String name) => parseType(name);
+    shared actual Type<> type(String name) {
+        value r = parseType(name);
+        if (is Type<> r) {
+            return r;
+        } else {
+            throw r;
+        }
+    }
     shared actual String name(Type<Anything> type) => type.string;
 }
 
