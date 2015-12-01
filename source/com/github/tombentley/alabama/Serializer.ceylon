@@ -118,6 +118,12 @@ class InstanceMap<Item>()
     }
 }
 
+abstract class State() of top|inObject|inArray {}
+// XXX Theres no real difference between inArray and top
+object top extends State(){}
+object inObject extends State(){}
+object inArray extends State(){}
+
 """A Serializer converts a tree of Ceylon objects to JSON. 
    It's not much more than a way to introspect an recurse through an object tree, really."""
 see(`function serialize`)
@@ -178,7 +184,7 @@ shared class Serializer(
     }
     
     "Ceylon Sequences are serialized as JSON arrays."
-    void seq(Output visitor,
+    void seq(State state, Output visitor,
             InstanceMap<Integer> ids, 
             Type<> staticType, 
             Anything[] instance) {
@@ -188,23 +194,23 @@ shared class Serializer(
         // and iteratedType from that
         // unless it's a tuple, in which case the sequence type is irrelevant
         // and it's only the element types which count.
-        visitor.onStartArray(staticType, rtType);
+        value s2 = visitor.onStartArray(state, staticType, rtType);
         for (Anything element in instance) {
-               val(visitor, ids, it, element);
+               val(inArray, visitor, ids, it, element);
         }
-        visitor.onEndArray(staticType, rtType);
+        visitor.onEndArray(state, s2, staticType, rtType);
     }
     
     "Ceylon Arrays are serialized as JSON arrays.
      We have to treat them differently from Sequences because unlike 
      sequences they can contain cycles because they're mutable."
-    void arr(Output visitor,
+    void arr(State state, Output visitor,
         InstanceMap<Integer> ids, 
         Type<> staticType, 
         Array<out Anything> instance) {
         value it = iteratedType(staticType);
         value rtType = type(instance);
-        visitor.onStartArray(staticType, rtType);
+        value s2 = visitor.onStartArray(state, staticType, rtType);
         // XXX The question here is how to represent a reference within an array
         // As an object {"@": 42}
         // XXX Arrays are also identifiable, so how do we represent their id
@@ -217,13 +223,13 @@ shared class Serializer(
                     instance === referred) {
                     value id2 = getId(ids, instance);
                 } else {
-                    val(visitor, ids, it, ref.referred(instance));
+                    val(inArray, visitor, ids, it, ref.referred(instance));
                 }
             } else {
                 
             }
         }
-        visitor.onEndArray(staticType, rtType);
+        visitor.onEndArray(state, s2, staticType, rtType);
     }
     
     Integer getId(InstanceMap<Integer> ids, Anything r) {
@@ -242,14 +248,14 @@ shared class Serializer(
     }
     
     "Ceylon Objects are serialized as JSON hashes (objects)."
-    void obj(Output visitor,
+    void obj(State state, Output visitor,
             InstanceMap<Integer> ids, 
             Type<> modelType, 
             Object instance) {
         value id_=getId(ids, instance);
         value clazz = type(instance);
         
-        visitor.onStartObject(id_, if (modelType != clazz) then clazz else null);
+        value s2 = visitor.onStartObject(state, id_, if (modelType != clazz) then clazz else null);
         Integer id;
         if (id_ > 0) {
             /* We need to track whether we've emitted this object yet
@@ -291,12 +297,12 @@ shared class Serializer(
                     } else {
                         //print("``referent.attribute`` by value");
                         visitor.onKey(makeKeyName(referent));
-                        val(visitor, ids, attributeType(modelType, clazz, referent.attribute)?.type else `Nothing`, ref.item);
+                        val(inObject, visitor, ids, attributeType(modelType, clazz, referent.attribute)?.type else `Nothing`, ref.item);
                     }
                 }
                 case (is Outer) {
                     visitor.onKey("outer");
-                    val(visitor, ids, `Nothing`, ref.item);// XXX not Nothing
+                    val(inObject, visitor, ids, `Nothing`, ref.item);// XXX not Nothing
                 }
                 case (is Element) {
                     "Object with an element"
@@ -304,33 +310,33 @@ shared class Serializer(
                 }
             }
         }
-        visitor.onEndObject(id, if (modelType != clazz) then clazz else null);
+        visitor.onEndObject(state, s2, id, if (modelType != clazz) then clazz else null);
     }
     
     "Serialize a value, recursively for objects and arrays"
-    void  val(Output visitor,
+    void  val(State state, Output visitor,
             InstanceMap<Integer> ids,
             Type<> staticType, 
             Anything instance) {
         if (!exists instance) {
             visitor.onNull();
         } else if (is Integer|Float instance) {
-            visitor.onNumber(instance);
+            visitor.onNumber(state, instance, staticType);
         } else if (is String instance) {
             visitor.onString(instance.string);
-        } else if (staticType == `Character`) {
-            visitor.onString(instance.string);
+        } else if (is Character instance) {
+            visitor.onCharacter(state, instance, staticType);
         } else if (is Boolean instance) {
             visitor.onBoolean(instance);
         } else if (!instance is Empty|Range<out Anything>, is Anything[] instance) {
-            seq(visitor, ids, staticType, instance);
+            seq(state, visitor, ids, staticType, instance);
         } else if (/*type(instance).declaration == `class Array`,// TODO need an isArray() in the metamodel
             // or more generally isInstanceOf(BaseType)
                 is {Anything*}&Identifiable instance*/
                 is Array<out Anything> instance) {
-            arr(visitor, ids, staticType, instance);
+            arr(state, visitor, ids, staticType, instance);
         } else {
-            obj(visitor, ids, staticType, instance);
+            obj(state, visitor, ids, staticType, instance);
         }
     }
     
@@ -349,152 +355,152 @@ shared class Serializer(
         //output = TypeAttribute(output, visitor);
         // ... and @foo keys for things in cycles
         //output = AttributeReferencer(output, visitor);
-        val(output, ids, typeLiteral<Instance>(), instance);
+        val(top, output, ids, typeLiteral<Instance>(), instance);
     }
 }
 
-
-
-/*
-     Need the concept of an "indirection" which should look distinct to a 
-     normal hash or array
-     { "#": 2, ... } // an object with id 2 (embedded in the object)
-     { "#": 3, "[": [...]} an array with id 3 (wrapper object around the array). Not an object containing an array because the "[" key is impossible in a normal object
-     [{"#":3}, ...] an array with id 3 (embedded embedded in the array) XX could be an empty object
-     { "@foo": 2 } // an attribute referencing an id (inline)
-     { "foo": {"@": 2} } // an attribute referencing an id (embedded). Must be a reference because no normal object contains a "@" key
-     [ {"@": 2} ] // an array with a reference element (embedded). Must be a reference because no normal object contains a "@" key
-     */
-
-abstract class TypeInfo() {
-    shared default void beforeStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
-    shared default void afterStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
-    shared default void beforeEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
-    shared default void afterEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {}
-}
-object noTypeInfo extends TypeInfo() {}
-class InlineAttributeTypeInfo(String typeKey="class") extends TypeInfo() {
-    shared actual void afterStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
-        if (exists type) {
-            visitor.onKey(typeKey);
-            visitor.onString(typeNaming.name(type));
-        }
-    }
-}
-class WrapperObjectTypeInfo(String typeKey="class", String valueKey="value") extends TypeInfo() {
-    shared actual void beforeStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
-        if (exists type) {
-            visitor.onStartObject();
-            visitor.onKey(typeKey);
-            visitor.onString(typeNaming.name(type));
-            visitor.onKey(valueKey);
-        }
-    }
-    shared actual void afterEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
-        if (exists type) {
-            visitor.onEndObject();
-        }
-    }
-}
-object wrapperArrayTypeInfo extends TypeInfo() {
-    shared actual void beforeStartObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
-        if (exists type) {
-            visitor.onStartArray();
-            visitor.onString(typeNaming.name(type));
-        }
-    }
-    shared actual void afterEndObject(TypeNaming typeNaming, Type<>? type, Visitor visitor) {
-        if (exists type) {
-            visitor.onEndArray();
-        }
-    }
-}
 
 "Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
  [[Output]]."
-class Output(Visitor visitor,
-    TypeNaming typeNaming=fqTypeNaming, 
+class Output(Visitor jsonVisitor,
+    TypeNaming typeNaming=fqTypeNaming,
+    String classKey="class",
     String idKey="#",
-    String idReferencePrefix="@",
-    TypeInfo typeInfo=InlineAttributeTypeInfo()) {
+    String idReferencePrefix="@") {
     
-    shared default void onBoolean(Boolean boolean) {
-        visitor.onBoolean(boolean);
-    }
-    
-    shared default void onStartObject(Integer id, ClassModel<>? type) {
-        typeInfo.beforeStartObject(typeNaming, type, visitor);
-        visitor.onStartObject();
-        if (id != 0) {
-            visitor.onKey(idKey);
-            visitor.onNumber(id);
+    State typeWrapper(State state, Type<> type) {
+        if (state != inObject) {
+            jsonVisitor.onStartObject();
         }
-        typeInfo.afterStartObject(typeNaming, type, visitor);
+        jsonVisitor.onKey(classKey);
+        jsonVisitor.onString(typeNaming.name(type));
+        return inObject;
     }
     
-    shared default void onEndObject(Integer? id, ClassModel<>? type) {
-        typeInfo.beforeEndObject(typeNaming, type, visitor);
-        visitor.onEndObject();
-        typeInfo.afterEndObject(typeNaming, type, visitor);
+    State idWrapper(State state, String idKey, Integer id) {
+        if (state != inObject) {
+            jsonVisitor.onStartObject();
+        }
+        jsonVisitor.onKey(idKey);
+        jsonVisitor.onNumber(id);
+        return inObject;
     }
     
-    shared default void onKey(String key) {
-        visitor.onKey(key);
+    State valueWrapper(State state) {
+        if (state != inObject) {
+            jsonVisitor.onStartObject();
+        }
+        jsonVisitor.onKey("value");
+        return inObject;
     }
     
-    shared default void onKeyReference(String key, Integer id) {
-        visitor.onKey(idReferencePrefix+ key);
-        visitor.onNumber(id);
+    shared void onBoolean(Boolean boolean) {
+        jsonVisitor.onBoolean(boolean);
     }
     
-    shared default void onNull() {
-        visitor.onNull();
+    shared void onNull() {
+        jsonVisitor.onNull();
     }
     
-    shared default void onNumber(Integer|Float number) {
-        visitor.onNumber(number);
+    shared void onNumber(State state, Integer|Float number, Type<Anything> type) {
+        variable value s2 = state;
+        
+        if (is Float number) {
+            if (number.infinite) {
+                if (!type.subtypeOf(`Integer|Float`)) {
+                    s2 = typeWrapper(s2, `Float`);
+                }
+                s2 = valueWrapper(s2);
+                jsonVisitor.onString(if (number.positive) then "Infinity" else "-Infinity");
+            } else if (number.undefined) {
+                if (!type.subtypeOf(`Integer|Float`)) {
+                    s2 = typeWrapper(s2, `Float`);
+                }
+                s2 = valueWrapper(s2);
+                jsonVisitor.onString("NaN");
+                
+            } else {
+                jsonVisitor.onNumber(number);
+            }
+        } else {
+            jsonVisitor.onNumber(number);
+        }
+        if (s2 == inObject && state != inObject) {
+            jsonVisitor.onEndObject();
+        }
     }
     
-    shared default void onStartArray(Type<> staticType, Type<> rtType) {
-        WrapperObjectTypeInfo? w;
+    shared void onString(String string) {
+        jsonVisitor.onString(string);
+    }
+    
+    shared void onCharacter(State state, Character instance, Type<Anything> staticType) {
+        variable value s2 = state;
+        if (staticType != `Character`) {
+            s2 = typeWrapper(s2, `Character`);
+            s2 = valueWrapper(s2);
+        } 
+        jsonVisitor.onString(instance.string);
+        if (s2 == inObject && state != inObject) {
+            jsonVisitor.onEndObject();
+        }
+    }
+    
+    shared State onStartObject(State state, Integer id, ClassModel<>? type) {
+        variable value s2 = state;
+        jsonVisitor.onStartObject();
+        s2 = inObject;
+        if (exists type) {
+            s2 = typeWrapper(s2, type);
+        }
+        
+        if (id != 0) {
+            jsonVisitor.onKey(idKey);
+            jsonVisitor.onNumber(id);
+        }
+        return s2;
+    }
+    
+    shared void onEndObject(State state, State s2, Integer? id, ClassModel<>? type) {
+        jsonVisitor.onEndObject();
+        //if (s2 == inObject && state != inObject) {
+        //    jsonVisitor.onEndObject();
+        //}
+    }
+    
+    shared void onKey(String key) {
+        jsonVisitor.onKey(key);
+    }
+    
+    shared void onKeyReference(String key, Integer id) {
+        jsonVisitor.onKey(idReferencePrefix+ key);
+        jsonVisitor.onNumber(id);
+    }
+    
+    
+    shared State onStartArray(State state, Type<> staticType, Type<> rtType) {
+        variable value s2 = state;
         if (is ClassModel<> staticType, 
             staticType.declaration != `class Array`,
             staticType.declaration != `class Tuple`,
             staticType != rtType) {
-            value w1 = WrapperObjectTypeInfo();
-            w1.beforeStartObject(typeNaming, rtType, visitor);
-            w=w1;
-        } else {
-            w = null;
+            s2 = typeWrapper(s2, rtType);
+            s2 = valueWrapper(s2);
         }
-        visitor.onStartArray();
-        if (exists w) {
-            w.afterStartObject(typeNaming, rtType, visitor);
-        }
+        
+        jsonVisitor.onStartArray();
+        return s2;
+        
         // XXX note we sometimes only care about the base type
         // e.g. with [1, ""] we might only care that the base type is Array, or
         // Tuple, and be happy to figure out the element types on the fly.
     }
     
-    shared default void onEndArray(Type<> staticType, Type<> rtType) {
-        WrapperObjectTypeInfo? w;
-        if (is ClassModel<> staticType, 
-            staticType.declaration != `class Array`,
-            staticType.declaration != `class Tuple`,
-            staticType != rtType) {
-            value w1 = WrapperObjectTypeInfo();
-            w1.beforeEndObject(typeNaming, rtType, visitor);
-            w=w1;
-        } else {
-            w = null;
-        }
-        visitor.onEndArray();
-        if (exists w) {
-            w.afterEndObject(typeNaming, rtType, visitor);
+    shared void onEndArray(State state, State s2, Type<> staticType, Type<> rtType) {
+        jsonVisitor.onEndArray();
+        if (s2 == inObject && state != inObject) {
+            jsonVisitor.onEndObject();
         }
     }
     
-    shared default void onString(String string) {
-        visitor.onString(string);
-    }
 }

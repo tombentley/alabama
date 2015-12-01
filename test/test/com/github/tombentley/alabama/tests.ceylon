@@ -1,7 +1,8 @@
 import ceylon.test {
     test,
     assertEquals,
-    fail
+    fail,
+    assertTrue
 }
 
 import com.github.tombentley.alabama {
@@ -189,7 +190,7 @@ shared void serializeString() {
 test
 shared void serializeCharacter() {
     assertEquals(serialize('c'), """"c"""");
-    assertEquals(serialize<Object>('c'), """{"class":"ceylon.language::Character","character":"c"}""");
+    assertEquals(serialize<Object>('c'), """{"class":"ceylon.language::Character","value":"c"}""");
 }
 test
 shared void serializeInteger() {
@@ -698,6 +699,48 @@ shared void rtFloat() {
 }
 
 test
+shared void rtMinusZero() {
+    variable String json = serialize(-0.0);
+    assertEquals(json, """-0.0""");
+    value got = deserialize<Float>(json);
+    assertEquals(got, -0.0);
+    assertTrue(got.strictlyNegative);
+    
+}
+
+test
+shared void rtNaN() {
+    variable String json = serialize(0.0/0.0);
+    assertEquals(json, """{"value":"NaN"}""");
+    //value got = deserialize<Float>(json);
+    //assertTrue(got.undefined);
+    
+    json = serialize<Object>(0.0/0.0);
+    assertEquals(json, """{"class":"ceylon.language::Float","value":"NaN"}""");
+}
+
+test
+shared void rtInfinity() {
+    value infinity = 1.0/0.0;
+    variable String json = serialize(infinity);
+    assertEquals(json, """{"value":"Infinity"}""");
+    // TODO assertEquals(deserialize<Float>(json), infinity);
+    
+    json = serialize<Object>(infinity);
+    assertEquals(json, """{"class":"ceylon.language::Float","value":"Infinity"}""");
+    // TODO assertEquals(deserialize<Float>(json), infinity);
+    
+    json = serialize(-infinity);
+    assertEquals(json, """{"value":"-Infinity"}""");
+    // TODO assertEquals(deserialize<Float>(json), -infinity);
+    
+    json = serialize<Object>(-infinity);
+    assertEquals(json, """{"class":"ceylon.language::Float","value":"-Infinity"}""");
+    // TODO assertEquals(deserialize<Float>(json), -infinity);
+    
+}
+
+test
 shared void rtBoolean() {
     variable String json = serialize(true);
     assertEquals(json, """true""");
@@ -726,7 +769,7 @@ shared void rtCharacter() {
     assertEquals(deserialize<Character>(json), 'x');
     
     json = serialize<Object>('x' of Object);
-    assertEquals(json, """{"class":"ceylon.language::Character","character":"x"}""");
+    assertEquals(json, """{"class":"ceylon.language::Character","value":"x"}""");
     assertEquals(deserialize<Object>(json), 'x');
 }
 
@@ -899,7 +942,7 @@ shared void rtSingleton() {
     assertEquals(deserialize<Singleton<Character>>(json), Singleton('x'));
     
     json = serialize(Singleton('x' of Object));
-    assertEquals(json, """[{"class":"ceylon.language::Character","character":"x"}]""");
+    assertEquals(json, """[{"class":"ceylon.language::Character","value":"x"}]""");
     // Need to know it's supposed to be a singleton, otherwise we just get ArraySequence
     assertEquals(deserialize<Singleton<Anything>>(json), Singleton('x'));
     assertEquals(deserialize<Object>(json), Singleton('x'));
@@ -969,8 +1012,8 @@ shared void rtDiamond() {
                            "left": {
                             "class": "test.com.github.tombentley.alabama::One",
                             "first": {
-                             "#": 1,
-                             "class": "test.com.github.tombentley.alabama::Zero"
+                             "class": "test.com.github.tombentley.alabama::Zero",
+                             "#": 1
                             }
                            },
                            "right": {

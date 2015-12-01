@@ -7,10 +7,11 @@ import ceylon.collection {
 import com.github.tombentley.typeparser {
     parseType
 }
-"""A contract for obtaining a [[Type]] from the value of a 
-   "@type" property in the JSON data being deserialized.
+"""A contract for converting between types and "type names" in an 
+   invertible way.
    """
 shared interface TypeNaming {
+    throws(`class Exception`, "The given name cannot be parsed as a type")
     shared formal Type<> type(String name);
     shared formal String name(Type<> type);
 }

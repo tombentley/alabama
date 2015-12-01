@@ -4,22 +4,25 @@ Let's start with the simplest possible cases:
 
 <table>
 <tbody>
-<tr><th>Ceylon instance type</th>   <th>JSON representation</th></tr>
-<tr><td><code>Null</code></td>      <td><code>null</code> literal</td></tr>
-<tr><td><code>Boolean</code></td>   <td><code>true</code>/<code>false</code> literal</td></tr>
-<tr><td><code>Integer</code></td>   <td><code>Number</code></td></tr>
-<tr><td><code>Float</code></td>     <td><code>Number</code></td></tr>
-<tr><td><code>String</code></td>    <td><code>String></code></td></tr>
-<tr><td><code>Character</code></td> <td><code>String></code></td></tr>
+<tr><th>Ceylon instance type</th>     <th>JSON representation</th></tr>
+<tr><td><code>Null</code></td>        <td><code>null</code> literal</td></tr>
+<tr><td><code>Boolean</code></td>     <td><code>true</code>/<code>false</code> literal</td></tr>
+<tr><td><code>Integer</code></td>     <td><code>Number</code></td></tr>
+<tr><td><code>Float</code>*</td>      <td><code>Number</code></td></tr>
+<tr><td><code>String</code></td>      <td><code>String></code></td></tr>
+<tr><td><code>Character</code>**</td> <td><code>String></code></td></tr>
 </tbody>
 </table>
 
-TODO What about infinity and NaN? What about -0.0?
+\* infinite and undefined (aka NaN) `Floats` get wrapped in objects
+   since they can't be represented as numbers in JSON
+** distinguished from a Ceylon `String` by type, using an object wrapper 
+   with a `"class"` key if necessary
 
 # Objects
 
-All other instances of `serializable` classes map to JSON objects of one 
-form or another. For example the Ceylon class
+Instances of `serializable` classes map to JSON objects. 
+For example the Ceylon class
 
     class Person(first, last) {
         shared String first;
@@ -53,7 +56,7 @@ being passed out-of-band:
       "last": "Doe"
     }
 
-The `"class"` key is configurable, as is the bijective mapping used to 
+The `"class"` key is configurable, as is the invertible mapping used to 
 transform the type `Person` to a `String`. In the above example 
 we used `"example.package::Person"`, 
 but if all the classes in the serialized form came from a single package 
@@ -77,14 +80,14 @@ confronted with
     
 and no type information we need to know what kind of type to recreate.
  
-(Because we know that `Sequential`s is covariant, we can cheat a little.
+(Because we know that `Sequential` is covariant, we can cheat a little.
 At serialization-time we only need to know the *base type* of the sequence
 because at deserialization time we can use the types of the elements
 to compute a sequence type, and that computed sequence type is necessarily a 
 subtype of what the serialization-time sequence type was. 
 This is a variation of the trick that we use for all Tuple types).
 
-**TODO** span and measure do not map to JSON arrays. 
+**TODO** span and measure map to JSON arrays, but maybe shouldn't 
 **TODO** it would be nice if other things like `ArrayList` and `LinkedList`
 could be mapped to arrays.
 
@@ -129,6 +132,8 @@ the directed graph has a cycle:
 So support cycles we need extra information to encode an instance's 
 identity.
 
+## Objects with identity
+
 For objects we can add an extra "#" key to encode the identity:
 
     {
@@ -150,7 +155,29 @@ including it as a sub-object) it uses a key ending with a `@`:
 In general we can't just say `"manager": 123` because the type of the `manager`
 reference might be `Integer|Person`, and then `"manager": 123` is ambiguous.
 
-This covers the case of encoding an objects identity, but what about
-a collection's identity?
+By default we only emit an instance's identity if 
+if that instance is referenced more than once.
 
-And what about a collection element referencing a an instance by identity?
+## Collections with identity
+
+Firstly note that collections aren't always `Identifiable` (in the Ceylon 
+sense). This is true of the `Sequential` classes. Since `[1,2,3]` is 
+immutable its identity doesn't matter. 
+
+However, there a plenty of collections with a meaningful identity, including
+`Array`, so we still need a way to encode the identity of things which otherwise
+would get encoded as plain JSON arrays. To do this we use a wrapper JSON 
+object:
+
+    { 
+      "#": 456,
+      "value": [1, 2, 3]
+    }
+
+## Collections with identity-referencing elements
+
+And what about a collection element referencing an instance by identity? 
+Well for that we also use a wrapper JSON object:
+
+    [{"@": 456}]
+    
