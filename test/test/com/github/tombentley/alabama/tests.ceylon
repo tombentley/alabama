@@ -738,6 +738,14 @@ shared void rtInfinity() {
     assertEquals(json, """{"class":"ceylon.language::Float","value":"-Infinity"}""");
     assertEquals(deserialize<Float>(json), -infinity);
     
+    json = serialize([infinity]);
+    assertEquals(json, """[{"value":"Infinity"}]""");
+    assertEquals(deserialize<[Float]>(json), [infinity]);
+    
+    json = serialize<Object>([infinity]);
+    assertEquals(json, """{"class":"ceylon.language::Tuple<ceylon.language::Float,ceylon.language::Float,ceylon.language::empty>","value":[{"class":"ceylon.language::Float","value":"Infinity"}]}""");
+    assertEquals(deserialize<Object>(json), [infinity]);
+    
 }
 
 test

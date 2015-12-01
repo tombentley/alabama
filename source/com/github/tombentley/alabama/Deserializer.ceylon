@@ -50,12 +50,6 @@ class Builder<Id>(DeserializationContext<Id> dc, clazz, id)
         //print("bindAttribute(``attributeName``, ``attributeValue``) ``clazz``");
         //assert(exists attr = clazz.getAttribute<Nothing,Anything>(attributeName)); 
         ValueDeclaration vd = attribute.declaration;
-        if (attribute.string == "ceylon.language::Character.character") {
-            // XXX ^^ OMG, that's horrible! This is a special case to support
-            // characters like {"class"="Character", "value":"c"}
-            // I.e. a wrapper object around a non-serializable class
-            dc.instanceValue(id, dc.reconstruct<Character>(attributeValue));
-        } else
         if (vd.name.startsWith("@")) {
             dc.attribute(id, vd, attributeValue);
         } else {
@@ -66,9 +60,7 @@ class Builder<Id>(DeserializationContext<Id> dc, clazz, id)
     }
     
     shared Id->ClassModel<> instantiate() {
-        if (clazz == `Character`) {
-            // XXX ^^ part of same hack for character
-        } else if (exists ov = clazz.declaration.objectValue) {
+        if (exists ov = clazz.declaration.objectValue) {
             dc.instanceValue(id, ov.get());
         } else {
             dc.instance(id, clazz);
@@ -244,13 +236,13 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 value n = nextId();
                 dc.instanceValue(n, item);
                 return n->`String`;
-            } else if (item.size == 1,
+            } else if (item.size == 1 &&
                     modelType.supertypeOf(`Character`)) {
                 value n = nextId();
                 dc.instanceValue(n, item.first);
                 return n->`Character`;
-            } else if (wrapper 
-                && modelType.supertypeOf(`Float`)) {
+            } else if (wrapper && 
+                    modelType.supertypeOf(`Float`)) {
                 value n = nextId();
                 if (item == "Infinity") {
                     dc.instanceValue(n, infinity);
@@ -403,6 +395,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         
         Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
         if (isValue) {
+            // We're actually seeing a wrapper object here, so recurse
             value result = val(true, clazz);
             stream.next();// consume the end of the wrapper object
             return result;
@@ -445,27 +438,21 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     byRef = false;
                     keyName = jsonKey;
                 }
-                /*if (jsonKey == "value") {// it's a wrapper object
-                    value wrapped = val(false, clazz);
-                    assert(stream.next() is ObjectEndEvent);
-                    return wrapped;
-                } else {*/
-                    // The JSON object represents a `serializable` instance
-                    if (jsonKey in config.clazz(clazz.declaration).ignoredKeys) {
-                        // TODO need to ignore the whole subtree
-                        // TODO is ignoredKeys inherited? 
-                        
-                    } else if (exists ac=config.resolveKey(clazz, keyName)){
-                        // TODO lots to do here.
-                        //Why we passing modelType and dataType to attributeType
-                        //When we already decided to instantiate a clazz?
-                        //Why it called attributeType when it returns an Attribute?
-                        attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), ac.attr);
-                    }
-                    if (!attribute exists) {
-                        throw Exception("Couldn't find attribute for key '``jsonKey``' on ``clazz``");
-                    }
-                //}
+                // The JSON object represents a `serializable` instance
+                if (jsonKey in config.clazz(clazz.declaration).ignoredKeys) {
+                    // TODO need to ignore the whole subtree
+                    // TODO is ignoredKeys inherited? 
+                    
+                } else if (exists ac=config.resolveKey(clazz, keyName)){
+                    // TODO lots to do here.
+                    //Why we passing modelType and dataType to attributeType
+                    //When we already decided to instantiate a clazz?
+                    //Why it called attributeType when it returns an Attribute?
+                    attribute = attributeType(eliminateNull(modelType), eliminateNull(dataType), ac.attr);
+                }
+                if (!attribute exists) {
+                    throw Exception("Couldn't find attribute for key '``jsonKey``' on ``clazz``");
+                }
             }
             case (is String|Integer|Float|Boolean|Null) {
                 assert(exists attr=attribute);
