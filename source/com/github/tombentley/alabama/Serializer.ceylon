@@ -408,7 +408,7 @@ class Output(Visitor jsonVisitor,
                     s2 = typeWrapper(s2, `Float`);
                 }
                 s2 = valueWrapper(s2);
-                jsonVisitor.onString(if (number.positive) then "Infinity" else "-Infinity");
+                jsonVisitor.onString(if (number.positive) then "∞" else "-∞");
             } else if (number.undefined) {
                 if (!type.subtypeOf(`Integer|Float`)) {
                     s2 = typeWrapper(s2, `Float`);

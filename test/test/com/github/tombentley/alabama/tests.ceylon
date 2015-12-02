@@ -723,27 +723,27 @@ test
 shared void rtInfinity() {
     value infinity = 1.0/0.0;
     variable String json = serialize(infinity);
-    assertEquals(json, """{"value":"Infinity"}""");
+    assertEquals(json, """{"value":"∞"}""");
     assertEquals(deserialize<Float>(json), infinity);
     
     json = serialize<Object>(infinity);
-    assertEquals(json, """{"class":"ceylon.language::Float","value":"Infinity"}""");
+    assertEquals(json, """{"class":"ceylon.language::Float","value":"∞"}""");
     assertEquals(deserialize<Float>(json), infinity);
     
     json = serialize(-infinity);
-    assertEquals(json, """{"value":"-Infinity"}""");
+    assertEquals(json, """{"value":"-∞"}""");
     assertEquals(deserialize<Float>(json), -infinity);
     
     json = serialize<Object>(-infinity);
-    assertEquals(json, """{"class":"ceylon.language::Float","value":"-Infinity"}""");
+    assertEquals(json, """{"class":"ceylon.language::Float","value":"-∞"}""");
     assertEquals(deserialize<Float>(json), -infinity);
     
     json = serialize([infinity]);
-    assertEquals(json, """[{"value":"Infinity"}]""");
+    assertEquals(json, """[{"value":"∞"}]""");
     assertEquals(deserialize<[Float]>(json), [infinity]);
     
     json = serialize<Object>([infinity]);
-    assertEquals(json, """{"class":"ceylon.language::Tuple<ceylon.language::Float,ceylon.language::Float,ceylon.language::empty>","value":[{"class":"ceylon.language::Float","value":"Infinity"}]}""");
+    assertEquals(json, """{"class":"ceylon.language::Tuple<ceylon.language::Float,ceylon.language::Float,ceylon.language::empty>","value":[{"class":"ceylon.language::Float","value":"∞"}]}""");
     assertEquals(deserialize<Object>(json), [infinity]);
     
 }

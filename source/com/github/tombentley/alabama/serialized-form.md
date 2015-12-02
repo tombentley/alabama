@@ -10,14 +10,73 @@ Let's start with the simplest possible cases:
 <tr><td><code>Integer</code></td>     <td><code>Number</code></td></tr>
 <tr><td><code>Float</code>*</td>      <td><code>Number</code></td></tr>
 <tr><td><code>String</code></td>      <td><code>String></code></td></tr>
-<tr><td><code>Character</code>**</td> <td><code>String></code></td></tr>
+<tr><td><code>Character</code>*</td> <td><code>String></code></td></tr>
 </tbody>
 </table>
 
-\* infinite and undefined (aka NaN) `Floats` get wrapped in objects
-   since they can't be represented as numbers in JSON
-** distinguished from a Ceylon `String` by type, using an object wrapper 
-   with a `"class"` key if necessary
+* These have some caveats, read on...
+
+## Character value wrappers
+
+Because JSON lacks a character literal syntax we have to encode 
+a character using the available syntax. We usually use a JSON string and 
+that works fine when we know the JSON string is supposed to be a 
+Ceylon `Character`, but there are cases where that would be 
+ambiguous on deserialization.
+
+For example consider the class
+
+    class Ambiguous(charOrString) {
+        shared Character|String charOrString;
+    }
+    
+and the instances `Ambiguous('x')` and `Ambiguous("x")`. Without care 
+those would both serialize to the JSON
+
+    {
+      "charOrString": "x"
+    }
+    
+and what is the deserializer to do? In this case we use a wrapper object for 
+the instance referencing the `Character`:
+
+    {
+      "charOrString": {
+        "class": "ceylon.language::Character",
+        "value": "x"
+      }
+    }
+
+## Float value wrappers
+
+Almost all instances of `Float` are represented as JSON numbers, but 
+there are 3 which cannot be directly represented as a JSON
+ number: `infinity` (the result of computations such as 1.0/0.0), 
+ `-infinity` and "undefined" (a.k.a. NaN, the result of computations such 
+ as 0.0/0.0).
+ 
+ In order to be able to consume the JSON and we need a way to represent 
+ these values in JSON. To do that we use an object wrapper, here's infinity:
+ 
+     {
+       "value": "∞"
+     }
+     
+Here's NaN:
+
+     {
+       "value": "NaN"
+     }
+
+That's how it looks when we know that the value must be a `Float`, but there 
+are times when we need to encode the type, in which case:
+
+     {
+       "class": "ceylon.language::Float",
+       "value": "∞"
+     }
+
+So with a couple of exceptions, the "simple" types maps in the "obvious" way. 
 
 # Objects
 
@@ -43,7 +102,7 @@ But what if the consumer doesn't know what sort of thing they're expecting?
 What if they're expecting a `Person|Organization`, or something even 
 more general?
 
-For those cases it's necessary for the producer to be explicit by calling 
+For those cases it's necessary for the *producer* to be explicit by calling 
 `serialize<Person|Organization>(johnDoe)`, or
 `serialize(johnDoe of Object)` or similar. In this situation alabama 
 knows to add extra information to the object, so that the type is 
@@ -67,32 +126,11 @@ so the type information can be used to infer the types of the attributes
 corresponding to other keys. This prevents the need to have to read the 
 whole JSON tree into memory before deserialization can start.
 
-
-# Collections
-
-Ceylon has lots of different "collection"-like 
-classes, but JSON has only one, and we want the JSON representation to 
-look "natural". So `Array`, `ArraySequence`, `Singleton` and `Tuple` all map 
-to JSON array. That creates a problem at deserialization, because when 
-confronted with
-
-    [1, "a", true]
-    
-and no type information we need to know what kind of type to recreate.
- 
-(Because we know that `Sequential` is covariant, we can cheat a little.
-At serialization-time we only need to know the *base type* of the sequence
-because at deserialization time we can use the types of the elements
-to compute a sequence type, and that computed sequence type is necessarily a 
-subtype of what the serialization-time sequence type was. 
-This is a variation of the trick that we use for all Tuple types).
-
-**TODO** span and measure map to JSON arrays, but maybe shouldn't 
-**TODO** it would be nice if other things like `ArrayList` and `LinkedList`
-could be mapped to arrays.
-
-
 ## Identity
+
+Let's take a moment to step away from the concrete syntax we're using to 
+represent various things and talk about something slightly more abstract, but
+just as important.
 
 JSON is a tree-like format, but Ceylon instances form directed graphs. In 
 some use cases it is acceptable to emit the same subtree multiple times for 
@@ -134,16 +172,18 @@ identity.
 
 ## Objects with identity
 
-For objects we can add an extra "#" key to encode the identity:
+For Ceylon instances which get serialized as JSON objects we can add an 
+extra "#" key to encode the identity:
 
     {
       "#": 123,
       "first": "Jane",
       "second": "Doe"
     }
-    
-And when an attribute references an object using its identity (rather than
-including it as a sub-object) it uses a key ending with a `@`:
+
+When an attribute references an object using its identity (rather than
+including it as a sub-object) it uses a key ending with a `@`. 
+So if John's manager is Jane we might end up with this:
 
     { 
       "#": 124,
@@ -155,8 +195,77 @@ including it as a sub-object) it uses a key ending with a `@`:
 In general we can't just say `"manager": 123` because the type of the `manager`
 reference might be `Integer|Person`, and then `"manager": 123` is ambiguous.
 
-By default we only emit an instance's identity if 
-if that instance is referenced more than once.
+**Note:** we only emit an instance's identity if 
+that instance is referenced more than once.
+
+# Collections
+
+Ceylon has lots of different "collection"-like 
+classes, but JSON has only one, and we want the JSON representation to 
+look "natural". So `Array`, `ArraySequence`, `Singleton` and `Tuple` all map 
+to JSON array. That creates a problem at deserialization, because when 
+confronted with
+
+    [1, "a", true]
+    
+and no type information we need to know what kind of collection to recreate.
+
+ 
+(Because we know that `Sequential` is covariant, we can cheat a little.
+At serialization-time we only need to know the *base type* of the sequence
+because at deserialization time we can use the types of the elements
+to compute a sequence type, and that computed sequence type is necessarily a 
+subtype of what the serialization-time sequence type was. 
+This is a variation of the trick that we use for all Tuple types).
+
+**TODO** span and measure map to JSON arrays, but maybe shouldn't 
+**TODO** it would be nice if other things like `ArrayList` and `LinkedList`
+could be mapped to arrays.
+
+## Id wrapper
+
+As we discussed when talking about object identity,
+for a Ceylon instance is serialized to a JSON object we can always use a JSON 
+property to attach the instance's identity:
+
+    {
+      "#":123,
+      ... // the rest of the instances state
+    }
+
+but this is not possible when the 
+Ceylon instance is serialized to a JSON *array*, because in JSONO syntax arrays 
+only contain elements. (Note how we don't need to 
+worry about things which serialize to JSON strings, numbers, true, false or 
+null, because none of the Ceylon values which map to these things are 
+`Identifiable`).
+
+Several classes serialize to a JSON array:
+
+* All subclasses of `Sequence`,
+* `Array`s
+
+The `Sequence`s are not a problem because they're not `Identifiable`, so if 
+two distinct but equal `Sequence`s of the same type get serialized and upon 
+deserialization are represented by a single instance there's no way that can 
+alter program semantics.
+
+Arrays are `Identifiable`, however, so we might need to encode their 
+identity.
+
+We use an "identity wrapper":
+
+    {
+      "#":567,
+      "value":["hello", "world"]
+    }
+
+That's the serialized form for an array `Array("hello", "world")`. 
+
+We only use such identity wrappers where we have to (that is, when the array 
+is referenced more than once).
+
+## Reference element
 
 ## Collections with identity
 
@@ -181,3 +290,11 @@ Well for that we also use a wrapper JSON object:
 
     [{"@": 456}]
     
+
+# Wrappers
+
+
+
+
+## Type wrapper
+

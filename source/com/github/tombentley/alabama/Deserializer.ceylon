@@ -244,10 +244,10 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             } else if (wrapper && 
                     modelType.supertypeOf(`Float`)) {
                 value n = nextId();
-                if (item == "Infinity") {
+                if (item == "∞") {
                     dc.instanceValue(n, infinity);
                     return n->`Float`;
-                } else if (item == "-Infinity") {
+                } else if (item == "-∞") {
                     dc.instanceValue(n, -infinity);
                     return n->`Float`;
                 } else if (item == "NaN") {
