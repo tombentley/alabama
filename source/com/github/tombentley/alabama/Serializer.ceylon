@@ -194,11 +194,28 @@ shared class Serializer(
         // and iteratedType from that
         // unless it's a tuple, in which case the sequence type is irrelevant
         // and it's only the element types which count.
-        value s2 = visitor.onStartArray(state, staticType, rtType);
+        value s2 = visitor.onStartArray(state, staticType, rtType, 0);
         for (Anything element in instance) {
                val(inArray, visitor, ids, it, element);
         }
         visitor.onEndArray(state, s2, staticType, rtType);
+    }
+    
+    
+    function markEmitted(Integer id_, InstanceMap<Integer> ids, Object instance) {
+        Integer id;
+        if (id_ > 0) {
+            /* We need to track whether we've emitted this object yet
+               once we've emitted it then future occurrences are by id 
+               reference.
+               Do this by negating the id once we've emitted the instance
+             */
+            id = -id_;
+            ids.put(instance,-id_);
+        } else {
+            id = id_;
+        }
+        return id;
     }
     
     "Ceylon Arrays are serialized as JSON arrays.
@@ -210,7 +227,9 @@ shared class Serializer(
         Array<out Anything> instance) {
         value it = iteratedType(staticType);
         value rtType = type(instance);
-        value s2 = visitor.onStartArray(state, staticType, rtType);
+        value id_ = getId(ids, instance);
+        value s2 = visitor.onStartArray(state, staticType, rtType, id_);
+        markEmitted(id_, ids, instance);
         // XXX The question here is how to represent a reference within an array
         // As an object {"@": 42}
         // XXX Arrays are also identifiable, so how do we represent their id
@@ -221,12 +240,17 @@ shared class Serializer(
             case (is Element) {
                 if (is Identifiable referred,
                     instance === referred) {
+                    // direct cycle: array contains itself!
                     value id2 = getId(ids, instance);
+                    Integer byReference = if (id2<0) then -id2 else id2;
+                    visitor.onElementReference(byReference);
                 } else {
                     val(inArray, visitor, ids, it, ref.referred(instance));
                 }
-            } else {
-                
+            }
+            else {
+                // This can only be Array.size, but we don't use that in the serialized form
+                assert(is Member ref, ref.attribute == `value Array.size`);
             }
         }
         visitor.onEndArray(state, s2, staticType, rtType);
@@ -252,23 +276,10 @@ shared class Serializer(
             InstanceMap<Integer> ids, 
             Type<> modelType, 
             Object instance) {
-        value id_=getId(ids, instance);
+        value id_ = getId(ids, instance);
         value clazz = type(instance);
-        
         value s2 = visitor.onStartObject(state, id_, if (modelType != clazz) then clazz else null);
-        Integer id;
-        if (id_ > 0) {
-            /* We need to track whether we've emitted this object yet
-               once we've emitted it then future occurrences are by id 
-               reference.
-               Do this by negating the id once we've emitted the instance
-             */
-            id = -id_;
-            ids.put(instance,-id_);
-            //print("Updating ``ids``");
-        } else {
-            id = id_;
-        }
+        markEmitted(id_, ids, instance);
         
         if (clazz.declaration.anonymous) {
             // there's no state we care about, XXX unless it's a member!
@@ -281,18 +292,10 @@ shared class Serializer(
                         continue;
                     }
                     value refId = getId(ids, ref.item);
-                    Integer byReference;
-                    if (refId<0) {
-                        byReference = -refId;
-                    } else {
-                        byReference = refId;
-                    }
-                    //print("``referent.attribute`` ``instance```:  ``id_`` ``id`` ``refId``");
+                    Integer byReference = if (refId<0) then -refId else refId;
                     if (refId < 0) { // ref occurs > 1, but it's already been omitted
-                        //print("``referent.attribute`` by reference");
                         visitor.onKeyReference(makeKeyName(referent), byReference);
                     } else {
-                        //print("``referent.attribute`` by value");
                         visitor.onKey(makeKeyName(referent));
                         val(inObject, visitor, ids, attributeType(modelType, clazz, referent.attribute)?.type else `Nothing`, ref.item);
                     }
@@ -307,7 +310,7 @@ shared class Serializer(
                 }
             }
         }
-        visitor.onEndObject(state, s2, id, if (modelType != clazz) then clazz else null);
+        visitor.onEndObject(state, s2, if (modelType != clazz) then clazz else null);
     }
     
     "Serialize a value, recursively for objects and arrays"
@@ -456,7 +459,7 @@ class Output(Visitor jsonVisitor,
         return s2;
     }
     
-    shared void onEndObject(State state, State s2, Integer? id, ClassModel<>? type) {
+    shared void onEndObject(State state, State s2, ClassModel<>? type) {
         jsonVisitor.onEndObject();
         //if (s2 == inObject && state != inObject) {
         //    jsonVisitor.onEndObject();
@@ -472,17 +475,27 @@ class Output(Visitor jsonVisitor,
         jsonVisitor.onNumber(id);
     }
     
+    shared void onElementReference(Integer id) {
+        jsonVisitor.onStartObject();
+        jsonVisitor.onKey(idReferencePrefix);
+        jsonVisitor.onNumber(id);
+        jsonVisitor.onEndObject();
+    }
     
-    shared State onStartArray(State state, Type<> staticType, Type<> rtType) {
+    shared State onStartArray(State state, Type<> staticType, Type<> rtType, Integer id) {
         variable value s2 = state;
         if (is ClassModel<> staticType, 
             staticType.declaration != `class Array`,
             staticType.declaration != `class Tuple`,
             staticType != rtType) {
             s2 = typeWrapper(s2, rtType);
+        }
+        if (id != 0) {
+            s2 = idWrapper(s2, id);
+        }
+        if (s2 != state) {
             s2 = valueWrapper(s2);
         }
-        
         jsonVisitor.onStartArray();
         return s2;
         

@@ -1,6 +1,5 @@
 import ceylon.collection {
-    ArrayList,
-    HashMap
+    ArrayList
 }
 import ceylon.json {
     StringTokenizer,
@@ -36,8 +35,7 @@ import ceylon.language.serialization {
     deser=deserialization
 }
 
-abstract class None() of none{}
-object none extends None() {}
+
 
 // XXX TODO I think this can be inlines into the Deserializer
 class Builder<Id>(DeserializationContext<Id> dc, clazz, id) 
@@ -103,6 +101,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
         elements.add(elementId);
         elementTypes.add(elementType);
     }
+    
     function instantiateTuple() {
         variable Id restId = nextId();
         variable ClassModel<> restType = type(empty);
@@ -135,6 +134,8 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
             return id->type([]);
         } else if (elements.size == 1,
             modelHint.subtypeOf(`Singleton<Anything>`)) {
+            // TODO this is also ugly loss of encapsulation like below
+            // TODO what if elements.size != 1? should I just throw?
             assert(exists iteratedType = elementTypes[0]);
             value singletonType = `class Singleton`.classApply<Anything,Nothing>(iteratedType);
             dc.instance(id, singletonType);
@@ -175,21 +176,27 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
 }
 
 "A [[ContainerBuilder]] for building [[Array]]s"
-class ArrayBuilder<Id>(DeserializationContext<Id> dc, clazz, id) 
+class ArrayBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
         satisfies ContainerBuilder<Id> 
         given Id satisfies Object {
-    ClassModel<Object> clazz;
     Id id;
     variable Integer index = 0;
     variable Type<Anything> elementType = `Nothing`;
+    
     shared actual void addElement(Type<> et, Id element) {
         dc.element(id, index++, element);
         elementType = type(element).union(elementType);
     }
+    
+    
     shared actual Id->ClassModel<> instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint) {
+        Class<> clazz = `class Array`.classApply<Anything,Nothing>(iteratedType(modelHint));
         dc.instance(id, clazz);
+        value sizeId = nextId();
+        dc.instanceValue(sizeId, index);
+        dc.attribute(id, `value Array.size`, sizeId);
         return id->clazz;
     }
 }
@@ -207,27 +214,99 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         return n;
     }
     
-    variable PeekIterator<BasicEvent>? input = null;
-    PeekIterator<BasicEvent> stream {
+    variable LookAheadIterator<BasicEvent>? input = null;
+    LookAheadIterator<BasicEvent> stream {
         assert(exists i=input);
         return i;
     }
     
     shared Instance deserialize(Iterator<BasicEvent>&Positioned input) {
-        this.input = PeekIterator(input);
-        return dc.reconstruct<Instance>(val(false, clazz).key);
+        this.input = LookAheadIterator(input, 2);
+        return dc.reconstruct<Instance>(val(false, null, clazz).key);
+    }
+    
+    Type<> peekClass() {
+        Type<> dataType;
+        if (exists typeNaming, exists typeProperty) {
+            // We ought to use any @type information we can obtain 
+            // from the JSON object to inform the type we figure out for this attribute
+            // but that requires (in general) that we buffer events until we reach
+            // the @type, so we know the type of this object, so we can 
+            // better figure out the type, of this attribute.
+            // In practice we can ensure the serializer emits @type
+            // as the first key, to keep such buffering to a minimum
+            if (is KeyEvent k = stream.lookAhead(1),
+                k.key == typeProperty) {
+                stream.next();//consume @type
+                if (is String typeName = stream.next()) {
+                    dataType = typeNaming.type(typeName);
+                } else {
+                    throw Exception("Expected String value for ``typeProperty`` property at ``stream.location``");
+                }
+            } else {
+                dataType = `Nothing`;
+            }
+        } else {
+            dataType = `Nothing`;
+        }
+        return dataType;
+    }
+    
+    Integer? peekId() {
+        Integer? id;
+        if (is KeyEvent k = stream.lookAhead(1),
+            k.key == "#") {
+            stream.next();//consume @type
+            switch (idProperty = stream.next()) 
+            case (is Integer){
+                id = idProperty;
+            }
+            else {
+                throw;
+            }
+        } else {
+            id = null;
+        }
+        return id;
+    }
+    
+    Boolean peekValue() {
+        if (is KeyEvent k = stream.lookAhead(1),
+            k.key == "value") {
+            stream.next();//consume @type
+            return true;
+        }
+        return false;
+    }
+    
+    Integer? peekElementRef() {
+        if (stream.lookAhead(1) is ObjectStartEvent,
+            is KeyEvent k = stream.lookAhead(2),
+            k.key == "@") {
+            stream.next();//consume {
+            stream.next();//consume @
+            switch (idProperty = stream.next()) 
+            case (is Integer){
+                assert(stream.next() is ObjectEndEvent);// consume }
+                return idProperty;
+            }
+            else {
+                throw;
+            }
+        }
+        return null;
     }
     
     "Peek at the next event in the stream and return the instance for it"
-    Integer->ClassModel<> val(Boolean wrapper, Type<> modelType) {
+    Integer->ClassModel<> val(Boolean wrapper, Integer? id, Type<> modelType) {
         //print("val(modelType=``modelType``)");
-        switch (item=stream.peek)
+        switch (item=stream.lookAhead(1))
         case (is ObjectStartEvent) {
             return obj(modelType);
         }
         case (is ArrayStartEvent) {
             // T is presumably some kind of X[], or Array<X> etc. 
-            return arr(modelType);
+            return arr(id, modelType);
         }
         case (is String) {
             stream.next();
@@ -303,20 +382,31 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         }
     }
     
-    Integer->ClassModel<> arr(Type<> modelType) {
+    Integer->ClassModel<> arr(Integer? id, Type<> modelType) {
         //print("arr(modelType=``modelType``)");
         assert(stream.next() is ArrayStartEvent);// consume initial {
         // not a SequenceBuilder, something else
         //print(modelType);
         //assert(is ClassOrInterface<Object> modelType);
-        SequenceBuilder<Integer> builder = SequenceBuilder<Integer>(dc, nextId(), nextId);
-        //ArrayBuilder2<Integer> builder = ArrayBuilder2<Integer>(dc, `Array<String>`, nextId());
+        ContainerBuilder<Integer> builder;
+        if (is Class<> modelType,
+                modelType.declaration == `class Array`) {
+            builder = ArrayBuilder<Integer>(dc, id else nextId(), nextId);
+        } else {
+            builder = SequenceBuilder<Integer>(dc, id else nextId(), nextId);
+        }
         while (true) {
-            switch(item=stream.peek)
+            switch(item=stream.lookAhead(1))
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
                 // TODO val knows the type of the thing it's creating, so we should use that as the et
-                value xx = val(false, iteratedType(modelType));
-                builder.addElement(xx.item, xx.key);
+                if (builder is ArrayBuilder<Integer>,
+                    item is ObjectStartEvent, 
+                    exists referredId = peekElementRef()) {
+                    builder.addElement(`Anything`, referredId);
+                } else {
+                    value xx = val(false, null, iteratedType(modelType));
+                    builder.addElement(xx.item, xx.key);
+                }
             }
             case (is ArrayEndEvent) {
                 stream.next();// consume ]
@@ -327,62 +417,11 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             case (is ObjectEndEvent|KeyEvent|Finished) {
                 throw Exception("unexpected event ``item``");
             }
-            
-        }
-    }
-    
-    function peekClass() {
-        Type<> dataType;
-        if (exists typeNaming, exists typeProperty) {
-            // We ought to use any @type information we can obtain 
-            // from the JSON object to inform the type we figure out for this attribute
-            // but that requires (in general) that we buffer events until we reach
-            // the @type, so we know the type of this object, so we can 
-            // better figure out the type, of this attribute.
-            // In practice we can ensure the serializer emits @type
-            // as the first key, to keep such buffering to a minimum
-            if (is KeyEvent k = stream.peek,
-                k.key == typeProperty) {
-                stream.next();//consume @type
-                if (is String typeName = stream.next()) {
-                    dataType = typeNaming.type(typeName);
-                } else {
-                    throw Exception("Expected String value for ``typeProperty`` property at ``stream.location``");
-                }
-            } else {
-                dataType = `Nothing`;
-            }
-        } else {
-            dataType = `Nothing`;
-        }
-        return dataType;
-    }
-    
-    function peekId() {
-        Integer? id;
-        if (is KeyEvent k = stream.peek,
-            k.key == "#") {
-            stream.next();//consume @type
-            switch (idProperty = stream.next()) 
-            case (is Integer){
-                id = idProperty;
-            }
-            else {
+            case (notStarted) {
                 throw;
             }
-        } else {
-            id = null;
+            
         }
-        return id;
-    }
-    
-    function peekValue() {
-        if (is KeyEvent k = stream.peek,
-            k.key == "value") {
-            stream.next();//consume @type
-            return true;
-        }
-        return false;
     }
     
     "Consume the next object from the [[stream]] and return the instance for it"
@@ -396,7 +435,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
         if (isValue) {
             // We're actually seeing a wrapper object here, so recurse
-            value result = val(true, clazz);
+            value result = val(true, id, clazz);
             stream.next();// consume the end of the wrapper object
             return result;
         }
@@ -404,7 +443,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         variable Attribute<>? attribute = null;
         variable Boolean byRef = false;
         while(true) {
-            switch (item = stream.peek)
+            switch (item = stream.lookAhead(1))
             case (is ObjectStartEvent) {
                 assert(exists attr=attribute);
                 builder.bindAttribute(attr, obj(attr.type).key);
@@ -419,7 +458,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             }
             case (is ArrayStartEvent) {
                 assert(exists attr=attribute);
-                builder.bindAttribute(attr, arr(eliminateNull(attr.type)).key);
+                builder.bindAttribute(attr, arr(null, eliminateNull(attr.type)).key);
                 attribute = null;
             }
             case (is ArrayEndEvent) {
@@ -459,9 +498,12 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 if (byRef, is Integer item) {
                     builder.bindAttribute(attr, item);
                 } else {
-                    builder.bindAttribute(attr, val(false, attr.type).key);
+                    builder.bindAttribute(attr, val(false, null, attr.type).key);
                 }
                 attribute = null;
+            }
+            case (notStarted) {
+                throw;
             }
         }
     }

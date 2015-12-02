@@ -454,13 +454,12 @@ test
 shared void rtCyclicArray() {
     Array<Anything> l = Array<Anything>.ofSize(1, null);
     l.set(0, l);
-    value json = serialize(l, true);
-    assertEquals(json, """{"#":1,"value":[{"@":1}]""");
+    value json = serialize(l, false);
+    assertEquals(json, """{"#":1,"value":[{"@":1}]}""");
     
-    value y = deserialize<Anything>(json);
+    value y = deserialize<Array<Anything>>(json);
     print(type(y));
-    assert(is Array<Anything> a = y);
-    assert(is Identifiable x=a[0], x === l); 
+    assert(is Identifiable x=y[0], x === y); 
 }
 
 
