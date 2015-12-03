@@ -81,10 +81,10 @@ interface ContainerBuilder<Id>
  calling [[SequenceBuilder.addElement]] and finally 
  [[SequenceBuilder.instantiate]]. 
  We don't know the sequence type until the end."
-class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
+class SequenceBuilder<Id>(DeserializationContext<Id> dc, sequenceId, Id nextId(String s)) 
         satisfies ContainerBuilder<Id> 
         given Id satisfies Object {
-    Id id;
+    Id sequenceId;
     ArrayList<Id> elements = ArrayList<Id>(); 
     ArrayList<Type> elementTypes = ArrayList<Type>();
     
@@ -103,7 +103,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
     }
     
     function instantiateTuple() {
-        variable Id restId = nextId();
+        variable Id restId = nextId("for rest of Tuple (id = ``sequenceId``)");
         variable ClassModel<> restType = type(empty);
         variable Type<Anything> iteratedType = `Nothing`;
         dc.instanceValue(restId, []); //instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
@@ -112,7 +112,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
         while (ii >= 0) {
                 assert(exists e = elements[ii]);
                 assert(exists et = elementTypes[ii]);
-                eid = if (ii == 0) then id else nextId();
+                eid = if (ii == 0) then sequenceId else nextId("for element index ``ii`` of Tuple (id ``sequenceId``)");
                 iteratedType = et.union(iteratedType);
                 value etype = `class Tuple`.classApply<Anything>(iteratedType, et, restType);
                 dc.instance(eid, etype);
@@ -122,7 +122,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
                 restType = etype;
                 ii--;
             }
-        return id->restType;
+        return sequenceId->restType;
     }
     
     shared actual Id->ClassModel<> instantiate(
@@ -130,18 +130,18 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
         Type<> modelHint) {
         //dc.instanceValue(id, elements.sequence());
         if (elements.empty) {
-            dc.instanceValue(id, empty);
-            return id->type([]);
+            dc.instanceValue(sequenceId, empty);
+            return sequenceId->type([]);
         } else if (elements.size == 1,
             modelHint.subtypeOf(`Singleton<Anything>`)) {
             // TODO this is also ugly loss of encapsulation like below
             // TODO what if elements.size != 1? should I just throw?
             assert(exists iteratedType = elementTypes[0]);
             value singletonType = `class Singleton`.classApply<Anything,Nothing>(iteratedType);
-            dc.instance(id, singletonType);
+            dc.instance(sequenceId, singletonType);
             assert(exists elementId = elements.first);
-            dc.attribute(id, `class Singleton`.getDeclaredMemberDeclaration<ValueDeclaration>("element") else nothing, elementId);
-            return id->singletonType;
+            dc.attribute(sequenceId, `class Singleton`.getDeclaredMemberDeclaration<ValueDeclaration>("element") else nothing, elementId);
+            return sequenceId->singletonType;
         } else if (isTuple(modelHint)) {
             return instantiateTuple();
         } else { 
@@ -150,9 +150,9 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
                 iteratedType = et.union(iteratedType);
             }
             // Use an array sequence
-            Id arrayId = nextId();
+            Id arrayId = nextId("for array of ArraySequence (id = ``sequenceId``)");
             dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
-            Id sizeId = nextId();
+            Id sizeId = nextId("for size of ArraySequence (id = ``sequenceId``)");
             dc.instanceValue(sizeId, elements.size);
             dc.attribute(arrayId, `value Array.size`, sizeId);
             variable value index = 0;
@@ -168,23 +168,23 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
             // use => toposort. But that would permit serialization of classes 
             // which were not annotated serializable, which would be pretty neat.
             value arraySequenceType = `class ArraySequence`.classApply<Anything,Nothing>(iteratedType);
-            dc.instance(id, arraySequenceType);
-            dc.attribute(id, `class ArraySequence`.getDeclaredMemberDeclaration<ValueDeclaration>("array") else nothing, arrayId);
-            return id->arraySequenceType;
+            dc.instance(sequenceId, arraySequenceType);
+            dc.attribute(sequenceId, `class ArraySequence`.getDeclaredMemberDeclaration<ValueDeclaration>("array") else nothing, arrayId);
+            return sequenceId->arraySequenceType;
         }
     }
 }
 
 "A [[ContainerBuilder]] for building [[Array]]s"
-class ArrayBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId()) 
+class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String s)) 
         satisfies ContainerBuilder<Id> 
         given Id satisfies Object {
-    Id id;
+    Id arrayId;
     variable Integer index = 0;
     variable Type<Anything> elementType = `Nothing`;
     
     shared actual void addElement(Type<> et, Id element) {
-        dc.element(id, index++, element);
+        dc.element(arrayId, index++, element);
         elementType = type(element).union(elementType);
     }
     
@@ -193,11 +193,11 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, id, Id nextId())
         "A hint at the type originating from the metamodel"
         Type<> modelHint) {
         Class<> clazz = `class Array`.classApply<Anything,Nothing>(iteratedType(modelHint));
-        dc.instance(id, clazz);
-        value sizeId = nextId();
+        dc.instance(arrayId, clazz);
+        value sizeId = nextId("for array of Array (id = ``arrayId``)");
         dc.instanceValue(sizeId, index);
-        dc.attribute(id, `value Array.size`, sizeId);
-        return id->clazz;
+        dc.attribute(arrayId, `value Array.size`, sizeId);
+        return arrayId->clazz;
     }
 }
 
@@ -207,11 +207,12 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
     Config config = Config();
     
     value dc = deser<Integer>();
-    variable value id = 0;
-    Integer nextId() {
-        value n = id;
-        id++;
-        return n;
+    variable value id_ = 0;
+    Integer nextId(String s) {
+        value id = this.id_;
+        this.id_--;
+        //print("allocate id ``id``: ``s``");
+        return id;
     }
     
     variable LookAheadIterator<BasicEvent>? input = null;
@@ -256,9 +257,10 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         Integer? id;
         if (is KeyEvent k = stream.lookAhead(1),
             k.key == "#") {
-            stream.next();//consume @type
+            stream.next();//consume #
             switch (idProperty = stream.next()) 
             case (is Integer){
+                print("peek id ``idProperty```");
                 id = idProperty;
             }
             else {
@@ -312,17 +314,17 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             stream.next();
             if (modelType.supertypeOf(`String`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                value n = nextId();
+                value n = nextId("for string literal ``item``");
                 dc.instanceValue(n, item);
                 return n->`String`;
             } else if (item.size == 1 &&
                     modelType.supertypeOf(`Character`)) {
-                value n = nextId();
+                value n = nextId("for string literal encoding character ``item``");
                 dc.instanceValue(n, item.first);
                 return n->`Character`;
             } else if (wrapper && 
                     modelType.supertypeOf(`Float`)) {
-                value n = nextId();
+                value n = nextId("for string literal encoding float ``item``");
                 if (item == "∞") {
                     dc.instanceValue(n, infinity);
                     return n->`Float`;
@@ -340,7 +342,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             stream.next();
             if (modelType.supertypeOf(`Integer`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                value n = nextId();
+                value n = nextId("for number literal encoding integer ``item``");
                 dc.instanceValue(n, item);
                 return n->`Integer`;
             }
@@ -350,7 +352,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             stream.next();
             if (modelType.supertypeOf(`Float`)) {
                 //print("val(modelType=``modelType``): ``item``");
-                value n = nextId();
+                value n = nextId("for number literal encoding float ``item``");
                 dc.instanceValue(n, item);
                 return n->`Float`;
             }
@@ -361,7 +363,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             if (modelType.supertypeOf(`true`.type)
                 || modelType.supertypeOf(`false`.type)) {
                 //print("val(modelType=``modelType``): ``item``");
-                value n = nextId();
+                value n = nextId("for boolean literal ``item``");
                 dc.instanceValue(n, item);
                 return n->`Boolean`;
             }
@@ -371,7 +373,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             stream.next();
             if (modelType.supertypeOf(`null`.type)) {
                 //print("val(modelType=``modelType``): null");
-                value n = nextId();
+                value n = nextId("for null");
                 dc.instanceValue(n, item);
                 return n->`Null`;
             }
@@ -391,9 +393,9 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         ContainerBuilder<Integer> builder;
         if (is Class<> modelType,
                 modelType.declaration == `class Array`) {
-            builder = ArrayBuilder<Integer>(dc, id else nextId(), nextId);
+            builder = ArrayBuilder<Integer>(dc, id else nextId("for array literal encoding Array"), nextId);
         } else {
-            builder = SequenceBuilder<Integer>(dc, id else nextId(), nextId);
+            builder = SequenceBuilder<Integer>(dc, id else nextId("for array literal encoding Sequence"), nextId);
         }
         while (true) {
             switch(item=stream.lookAhead(1))
@@ -429,10 +431,10 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         //print("obj(modelType=``modelType``)");
         assert(stream.next() is ObjectStartEvent);// consume initial {
         value dataType=peekClass();
-        value id = peekId() else nextId();
+        Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
+        value id = peekId() else nextId("for object encoding ``dataType``");
         value isValue = peekValue();
         
-        Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
         if (isValue) {
             // We're actually seeing a wrapper object here, so recurse
             value result = val(true, id, clazz);
@@ -470,7 +472,9 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 //print("key: ``item.eventValue``");
                 value jsonKey = item.key;
                 String keyName;
-                if (jsonKey.startsWith("@")) {
+                /*if (jsonKey == "#") {
+                    
+                } else*/ if (jsonKey.startsWith("@")) {
                     byRef=true;
                     keyName = jsonKey[1...];
                 } else {
@@ -494,13 +498,17 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 }
             }
             case (is String|Integer|Float|Boolean|Null) {
-                assert(exists attr=attribute);
-                if (byRef, is Integer item) {
-                    builder.bindAttribute(attr, item);
+                if(exists attr=attribute) {
+                    if (byRef, is Integer item) {
+                        stream.next();
+                        builder.bindAttribute(attr, item);
+                    } else {
+                        builder.bindAttribute(attr, val(false, null, attr.type).key);
+                    }
+                    attribute = null;
                 } else {
-                    builder.bindAttribute(attr, val(false, null, attr.type).key);
+                    assert(false);
                 }
-                attribute = null;
             }
             case (notStarted) {
                 throw;
