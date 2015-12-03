@@ -1,21 +1,21 @@
-import com.github.tombentley.alabama {
-    deserialize,
-    serialize
-}
-import ceylon.test {
-    assertEquals,
-    test,
-    assertTrue,
-    fail
+import ceylon.collection {
+    ArrayList,
+    LinkedList,
+    HashMap
 }
 import ceylon.language.meta {
     type,
     typeLiteral
 }
-import ceylon.collection {
-    ArrayList,
-    LinkedList,
-    HashMap
+import ceylon.test {
+    assertEquals,
+    test,
+    assertTrue
+}
+
+import com.github.tombentley.alabama {
+    deserialize,
+    serialize
 }
 
 test
@@ -209,18 +209,37 @@ shared void rtTupleWithRest() {
 
 test
 shared void rtArraySequence() {
-    assert(is ArraySequence<Anything> as = (Array{1, "2", true}.sequence() of Object));
+    assert(is ArraySequence<Integer|String|Boolean> as = Array{1, "2", true}.sequence());
     
     // with static type info
     variable value json = serialize(as);
     assertEquals(json, """[1,"2",true]""");
-    assert(is ArraySequence<Anything> as2 = deserialize<Anything>(json));
+    value as2 = deserialize<ArraySequence<Integer|String|Boolean>>(json);
     assert(as2 == as);
     
-    json = serialize(Generic(as));
+    // without static type info
+    json = serialize<Object>(as);
+    assertEquals(json, """{"class":"ceylon.language::ArraySequence<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>","value":[1,"2",true]}""");
+    assert(is ArraySequence<Integer|String|Boolean> as3 = deserialize<Object>(json));
+    assert(as3 == as);
+}
+
+test
+shared void rtArraySequenceInGeneric() {
+    assert(is ArraySequence<Integer|String|Boolean> as = Array{1, "2", true}.sequence());
+    value g = Generic(as);
+    
+    // with static type info
+    variable value json = serialize(g);
     assertEquals(json, """{"element":[1,"2",true]}""");
-    value as3 = deserialize<Generic<ArraySequence<Anything>>>(json);
+    value as3 = deserialize<Generic<ArraySequence<Integer|String|Boolean>>>(json);
     assert(as3.element == as);
+    
+    // without static type info
+    json = serialize<Object>(g);
+    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::ArraySequence<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>>","element":[1,"2",true]}""");
+    assert(is Generic<ArraySequence<Integer|String|Boolean>> as4 = deserialize<Object>(json));
+    assert(as4.element == as);
     
     // TODO without static type info
 }
@@ -922,13 +941,86 @@ shared void rtHashMap() {
     assertEquals(r2, a);
 }
 
-/*
-
 test
 shared void rtInvoice() {
-    fail("need to test this");
+    variable value json = serialize(exampleInvoice, true);
+    assertEquals(json,
+        """{
+            "bill": {
+             "name": "Mr Pig",
+             "address": {
+              "lines": [
+               "3 Pigs House",
+               "The Farm"
+              ],
+              "postCode": "3PH"
+             }
+            },
+            "deliver": {
+             "name": "Mr Pig",
+             "address": {
+              "lines": [
+               "3 Pigs House",
+               "The Farm"
+              ],
+              "postCode": "3PH"
+             }
+            },
+            "items": [
+             {
+              "product": {
+               "sku": "123",
+               "description": "Bag of sand",
+               "unitPrice": 2.34,
+               "salesTaxRate": 0.2
+              },
+              "quantity": 4.0
+             },
+             {
+              "product": {
+               "sku": "876",
+               "description": "Bag of cement",
+               "unitPrice": 3.57,
+               "salesTaxRate": 0.2
+              },
+              "quantity": 1.0
+             }
+            ]
+           }""");
+    value i2 = deserialize<Invoice>(json);
+    assertEquals(i2.bill.name, "Mr Pig");
+    assertEquals(i2.bill.address.lines.size, 2);
+    assert(exists ba1 = i2.bill.address.lines[0]);
+    assert(exists ba2 = i2.bill.address.lines[1]);
+    assertEquals(ba1, "3 Pigs House");
+    assertEquals(ba2, "The Farm");
+    assertEquals(i2.bill.address.postCode, "3PH");
+    
+    assertEquals(i2.deliver.name, "Mr Pig");
+    assertEquals(i2.deliver.address.lines.size, 2);
+    assert(exists bd1 = i2.deliver.address.lines[0]);
+    assert(exists bd2 = i2.deliver.address.lines[1]);
+    assertEquals(bd1, "3 Pigs House");
+    assertEquals(bd2, "The Farm");
+    assertEquals(i2.deliver.address.postCode, "3PH");
+    
+    value item1 = i2.items[0];
+    assertEquals(item1.product.sku, "123");
+    assertEquals(item1.product.description, "Bag of sand");
+    assertEquals(item1.product.unitPrice, 2.34);
+    assertEquals(item1.product.salesTaxRate, 0.2);
+    assertEquals(item1.quantity, 4);
+    
+    assert(exists item2 = i2.items[1]);
+    assertEquals(item2.product.sku, "876");
+    assertEquals(item2.product.description, "Bag of cement");
+    assertEquals(item2.product.unitPrice, 3.57);
+    assertEquals(item2.product.salesTaxRate, 0.2);
+    assertEquals(item2.quantity, 1.0);
 }
 
+
+/*
 
 test
 shared void rtCyclicLate() {

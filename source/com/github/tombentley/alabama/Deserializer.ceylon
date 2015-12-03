@@ -86,7 +86,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, sequenceId, Id nextId(S
         given Id satisfies Object {
     Id sequenceId;
     ArrayList<Id> elements = ArrayList<Id>(); 
-    ArrayList<Type> elementTypes = ArrayList<Type>();
+    ArrayList<Type<>> elementTypes = ArrayList<Type<>>();
     
     "Is the given `Type` reflecting a `Tuple`?"
     function isTuple(Type<> type) {
