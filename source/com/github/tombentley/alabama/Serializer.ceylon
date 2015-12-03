@@ -118,11 +118,14 @@ class InstanceMap<Item>()
     }
 }
 
-abstract class State() of top|inObject|inArray {}
+abstract class State(o) of top|inObject|inWrapper|inArray {
+    shared Boolean o;
+}
 // XXX Theres no real difference between inArray and top
-object top extends State(){}
-object inObject extends State(){}
-object inArray extends State(){}
+object top extends State(false){}
+object inObject extends State(true){}
+object inWrapper extends State(true){}
+object inArray extends State(false){}
 
 """A Serializer converts a tree of Ceylon objects to JSON. 
    It's not much more than a way to introspect an recurse through an object tree, really."""
@@ -211,7 +214,8 @@ shared class Serializer(
                Do this by negating the id once we've emitted the instance
              */
             id = -id_;
-            ids.put(instance,-id_);
+            ids.put(instance,id);
+            //print("emitted ``instance``, reassigning id to ``id``");
         } else {
             id = id_;
         }
@@ -245,7 +249,12 @@ shared class Serializer(
                     Integer byReference = if (id2<0) then -id2 else id2;
                     visitor.onElementReference(byReference);
                 } else {
-                    val(inArray, visitor, ids, it, ref.referred(instance));
+                    value id2 = getId(ids, referred);
+                    if (id2 < 0) {
+                        visitor.onElementReference(-id2);
+                    } else {
+                        val(inArray, visitor, ids, it, ref.referred(instance));
+                    }
                 }
             }
             else {
@@ -257,11 +266,14 @@ shared class Serializer(
     }
     
     Integer getId(InstanceMap<Integer> ids, Anything r) {
+        Integer id;
         if (exists r) {
-            return ids.get(r) else 0;
+            id = ids.get(r) else 0;
         } else {
-            return 0;
+            id = 0;
         }
+        //print("id ``id`` has ``r else "null"``");
+        return id;
     }
     
     "The string to use as a key for an object that refers to 
@@ -369,29 +381,36 @@ class Output(Visitor jsonVisitor,
     String idReferencePrefix="@") {
     
     State typeWrapper(State state, Type<> type) {
-        if (state != inObject) {
+        variable State result = state;
+        if (!state.o) {
             jsonVisitor.onStartObject();
+            result = inWrapper;
         }
         jsonVisitor.onKey(classKey);
         jsonVisitor.onString(typeNaming.name(type));
-        return inObject;
+        return result;
     }
     
     State idWrapper(State state, Integer id) {
-        if (state != inObject) {
+        variable State result = state;
+        if (!state.o) {
             jsonVisitor.onStartObject();
+            result = inWrapper;
         }
         jsonVisitor.onKey(idKey);
+        assert(id > 0);
         jsonVisitor.onNumber(id);
-        return inObject;
+        return result;
     }
     
     State valueWrapper(State state) {
-        if (state != inObject) {
+        variable State result = state;
+        if (!state.o) {
             jsonVisitor.onStartObject();
+            result = inWrapper;
         }
         jsonVisitor.onKey("value");
-        return inObject;
+        return result;
     }
     
     shared void onBoolean(Boolean boolean) {
@@ -409,14 +428,15 @@ class Output(Visitor jsonVisitor,
             if (number.infinite) {
                 if (!type.subtypeOf(`Integer|Float`)) {
                     s2 = typeWrapper(s2, `Float`);
+                    s2 = valueWrapper(s2);
                 }
-                s2 = valueWrapper(s2);
                 jsonVisitor.onString(if (number.positive) then "∞" else "-∞");
             } else if (number.undefined) {
                 if (!type.subtypeOf(`Integer|Float`)) {
                     s2 = typeWrapper(s2, `Float`);
+                    s2 = valueWrapper(s2);
                 }
-                s2 = valueWrapper(s2);
+                
                 jsonVisitor.onString("NaN");
                 
             } else {
@@ -425,7 +445,7 @@ class Output(Visitor jsonVisitor,
         } else {
             jsonVisitor.onNumber(number);
         }
-        if (s2 == inObject && state != inObject) {
+        if (s2 == inWrapper) {
             jsonVisitor.onEndObject();
         }
     }
@@ -441,7 +461,7 @@ class Output(Visitor jsonVisitor,
             s2 = valueWrapper(s2);
         } 
         jsonVisitor.onString(instance.string);
-        if (s2 == inObject && state != inObject) {
+        if (s2 == inWrapper) {
             jsonVisitor.onEndObject();
         }
     }
@@ -456,7 +476,7 @@ class Output(Visitor jsonVisitor,
         if (id != 0) {
             s2 = idWrapper(s2, id);
         }
-        return s2;
+        return inObject;
     }
     
     shared void onEndObject(State state, State s2, ClassModel<>? type) {
@@ -506,7 +526,7 @@ class Output(Visitor jsonVisitor,
     
     shared void onEndArray(State state, State s2, Type<> staticType, Type<> rtType) {
         jsonVisitor.onEndArray();
-        if (s2 == inObject && state != inObject) {
+        if (s2 == inWrapper && state != inWrapper) {
             jsonVisitor.onEndObject();
         }
     }

@@ -260,7 +260,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             stream.next();//consume #
             switch (idProperty = stream.next()) 
             case (is Integer){
-                print("peek id ``idProperty```");
+                //print("peek id ``idProperty```");
                 id = idProperty;
             }
             else {
@@ -322,8 +322,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 value n = nextId("for string literal encoding character ``item``");
                 dc.instanceValue(n, item.first);
                 return n->`Character`;
-            } else if (wrapper && 
-                    modelType.supertypeOf(`Float`)) {
+            } else if (modelType.supertypeOf(`Float`)) {
                 value n = nextId("for string literal encoding float ``item``");
                 if (item == "∞") {
                     dc.instanceValue(n, infinity);

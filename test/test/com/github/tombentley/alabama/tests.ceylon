@@ -180,10 +180,6 @@ shared void readingAnnotations() {
 }
 
 
-serializable class Generic<Element>(element) {
-    shared Element element;
-    shared actual String string => "Generic<``typeLiteral<Element>()``>(``element else "null"``)";
-}
 test
 shared void serializeGeneric() {
     
