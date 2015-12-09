@@ -23,6 +23,9 @@ import ceylon.language.serialization {
     serialization,
     uninitializedLateValue
 }
+import com.github.tombentley.typeparser {
+    TypeParser
+}
 
 /*
  I need an explicit type when:
@@ -34,13 +37,14 @@ import ceylon.language.serialization {
 "A utility for serializing an instance to a JSON-formatted String."
 shared String serialize<Instance>(
     rootInstance, 
-    pretty = false) {
+    pretty = false,
+    TypeNaming typeNaming = TypeExpressionTypeNaming()) {
     "The instance to serialize"
     Instance rootInstance;
     "Whether the returned JSON should be indented"
     Boolean pretty;
     value em = StringEmitter(pretty);
-    Serializer ss = Serializer();
+    Serializer ss = Serializer(typeNaming);
     ss.serialize<Instance>(em, rootInstance);
     return em.string;
 }
@@ -131,6 +135,7 @@ object inArray extends State(false){}
    It's not much more than a way to introspect an recurse through an object tree, really."""
 see(`function serialize`)
 shared class Serializer(
+    TypeNaming typeNaming = TypeExpressionTypeNaming(),
     Config config = Config()) {
     Integer singleReference = -1;
     
@@ -360,7 +365,7 @@ shared class Serializer(
         value ids = assignedIds(instance);
         //print(ids);
         // TODO The Discriminator, IdMaker etc might be different for different classes.
-        Output output = Output(visitor);
+        Output output = Output(visitor, typeNaming);
         // add decorators to the output which will add ids (using # key)...
         //output = PropertyIdMaker(output, visitor);
         // ...and @type keys...
@@ -375,7 +380,7 @@ shared class Serializer(
 "Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
  [[Output]]."
 class Output(Visitor jsonVisitor,
-    TypeNaming typeNaming=fqTypeNaming,
+    TypeNaming typeNaming,
     String classKey="class",
     String idKey="#",
     String idReferencePrefix="@") {

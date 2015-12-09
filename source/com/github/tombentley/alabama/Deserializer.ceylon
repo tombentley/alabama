@@ -34,6 +34,9 @@ import ceylon.language.serialization {
     DeserializationContext,
     deser=deserialization
 }
+import com.github.tombentley.typeparser {
+    TypeParser
+}
 
 
 
@@ -603,9 +606,10 @@ Type<> eliminateNull(Type<> type) {
     }
 }
 
-shared Instance deserialize<Instance>(String json) {
+shared Instance deserialize<Instance>(String json, 
+    TypeNaming typeNaming = TypeExpressionTypeNaming()) {
     Type<Instance> clazz = typeLiteral<Instance>();
-    Deserializer<Instance> deser = Deserializer<Instance>(clazz, fqTypeNaming, "class");
+    Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class");
     return deser.deserialize(StreamParser(StringTokenizer(json)));
     
 }

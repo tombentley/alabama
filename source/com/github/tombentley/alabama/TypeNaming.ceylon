@@ -1,12 +1,20 @@
+import ceylon.collection {
+    HashMap,
+    linked
+}
 import ceylon.language.meta.model {
     Type
 }
-import ceylon.collection {
-    HashMap
-}
+
 import com.github.tombentley.typeparser {
-    parseType
+    TypeParser,
+    TypeFormatter
 }
+import ceylon.language.meta.declaration {
+    Package,
+    ClassOrInterfaceDeclaration
+}
+
 """A contract for converting between types and "type names" in an 
    invertible way.
    """
@@ -16,24 +24,56 @@ shared interface TypeNaming {
     shared formal String name(Type<> type);
 }
 
-"""Encoding and decoding of instance types using a ("@type") 
-   attribute in the JSON hash whose value is the fully 
-   qualified type name."""
-shared object fqTypeNaming satisfies TypeNaming {
+// Avoid a shared import of the type parser by not depending on its
+// Imports alias, so redeclare it locally
+shared alias Imports=>List<Package|ClassOrInterfaceDeclaration|<String->ClassOrInterfaceDeclaration>>;
+
+"""Type naming using fully-qualified or unqualified type expressions"""
+shared class TypeExpressionTypeNaming(
+    Imports imports=[], 
+    Boolean abbreviate = false) satisfies TypeNaming {
+    
+    TypeParser parser = TypeParser {
+        imports = imports;
+        optionalAbbreviation=abbreviate;
+        emptyAbbreviation=abbreviate;
+        entryAbbreviation=abbreviate;
+        sequenceAbbreviation=abbreviate;
+        
+        iterableAbbreviation=abbreviate;
+        
+        tupleAbbreviation=abbreviate;
+        callableAbbreviation=abbreviate;
+    };
+    
+    TypeFormatter formatter = TypeFormatter {
+        imports=imports;
+        optionalAbbreviation=abbreviate;
+        emptyAbbreviation=abbreviate;
+        entryAbbreviation=abbreviate;
+        sequenceAbbreviation=abbreviate;
+        
+        iterableAbbreviation=abbreviate;
+        
+        tupleAbbreviation=abbreviate;
+        callableAbbreviation=abbreviate;
+    };
+    
     shared actual Type<> type(String name) {
-        value r = parseType(name);
+        value r = parser.parse(name);
         if (is Type<> r) {
             return r;
         } else {
             throw r;
         }
     }
-    shared actual String name(Type<Anything> type) => type.string;
+    shared actual String name(Type<Anything> type) {
+        return if (imports.empty && !abbreviate) then type.string else formatter.format(type);
+    }
 }
 
-"""Encoding and decodeing of instance types using a ("@type") 
-   attribute in the JSON hash whose value is an arbitrary `String` in a 
-   bijective mapping from types to type names."""
+
+"""A simple bijective mapping between types and strings"""
 shared class LogicalTypeNaming({<String->Type<>>*} names) satisfies TypeNaming {
     value toType = HashMap<String,Type<>>{*names};
     value toName = HashMap<Type<>, String>{};
