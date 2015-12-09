@@ -925,6 +925,30 @@ shared void rtEntry() {
 }
 
 test
+shared void rtEntryAbbrev() {
+    value a = 2->infinity;
+    
+    // with static type info
+    variable value json = serialize(a, true);
+    assertEquals(json, """{
+                           "key": 2,
+                           "item": "∞"
+                          }""");
+    value r = deserialize<Integer->Float>(json);
+    assertEquals(r, a);
+    
+    // without static type info
+    json = serialize<Object>(a, true);
+    assertEquals(json, """{
+                           "class": "ceylon.language::Entry<ceylon.language::Integer,ceylon.language::Float>",
+                           "key": 2,
+                           "item": "∞"
+                          }""");
+    value r2 = deserialize<Object>(json);
+    assertEquals(r2, a);
+}
+
+test
 shared void rtHashMap() {
     value a = HashMap{1->"foo", 2->infinity};
     

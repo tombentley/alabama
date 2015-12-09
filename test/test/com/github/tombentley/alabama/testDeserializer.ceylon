@@ -15,8 +15,8 @@ shared void run() {
     value deserializer = Deserializer {
         clazz = `Invoice`;
         typeNaming = LogicalTypeNaming(HashMap{
-            "Person" -> `Person`,
-            "Address" -> `Address`,
+            "Person" -> `Person3`,
+            "Address" -> `Address3`,
             "Item" -> `Item`,
             "Product" -> `Product`,
             "Invoice" -> `Invoice`

@@ -240,22 +240,22 @@ shared void serializePolymorphic() {
 
 """Example of entities in "Ceylon style", using named constructor arguments"""
 serializable class Invoice(bill, deliver, items) {
-    shared Person bill;
-    shared Person deliver;
+    shared Person3 bill;
+    shared Person3 deliver;
     shared [Item+] items;
     shared actual String string => "invoice to: ``bill``
                                     deliver to: ``deliver``
                                     items: ``"\n".join(items)``";
 }
 
-serializable class Person(name, address) {
+serializable class Person3(name, address) {
     shared String name;
-    shared Address address;
+    shared Address3 address;
     shared actual String string => "``name``
                                     ``address``";
 }
 
-serializable class Address(lines, postCode) {
+serializable class Address3(lines, postCode) {
     shared String[] lines;
     shared String postCode;
     shared actual String string => ",\n".join(lines) + postCode;
@@ -275,16 +275,16 @@ serializable class Product(sku, description, unitPrice, salesTaxRate) {
 }
 
 Invoice exampleInvoice => Invoice {
-    bill = Person {
+    bill = Person3 {
         name = "Mr Pig";
-        address = Address {
+        address = Address3 {
             lines = ["3 Pigs House", "The Farm"];
             postCode = "3PH";
         };
     };
-    deliver = Person {
+    deliver = Person3 {
         name = "Mr Pig";
-        address = Address {
+        address = Address3 {
             lines = ["3 Pigs House", "The Farm"];
             postCode = "3PH";
         };
