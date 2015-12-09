@@ -63,14 +63,15 @@ shared class LookAheadIterator<out Item>(Iterator<Item>&Positioned iterator, Int
         }
         if (buffer.size > 0) {
             assert(exists got=buffer.get(0));
-            return switch(got) case (is Looked<Item>) got.item case (is Finished) got else nothing;
+            return switch(got) case (is Looked<Anything>) got.item case (is Finished) got else nothing;
         } else {
-            if (!is Finished result = item(iterator.next())) {
-                buffer.add(result);
-                return result.item;
-            } else {
+            value result = item(iterator.next());
+            if (is Finished result) {
                 buffer.add(finished);
                 return finished;
+            } else {
+                buffer.add(result);
+                return result.item;
             }
             
         }
