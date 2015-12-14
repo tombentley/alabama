@@ -80,6 +80,19 @@ interface ContainerBuilder<Id>
         Type<> modelHint);
 }
 
+"A factory for ArraySequences."
+ArraySequence<Anything> arraySequence(Array<out Anything> e) {
+    /* The parameter cannot be Array there's no 
+       Array supertype of all Arrays, and we can't 
+       use a type parameter because at the point we 
+       take a method reference although we have a Type<>
+       we don't have anything we can use to pass as a 
+       type argument.
+     */
+    assert(is ArraySequence<Anything> r=e.sequence());
+    return r;
+}
+
 "Utility for building `Sequential`s by repeatedly 
  calling [[SequenceBuilder.addElement]] and finally 
  [[SequenceBuilder.instantiate]]. 
@@ -152,7 +165,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, sequenceId, Id nextId(S
             for (et in elementTypes) {
                 iteratedType = et.union(iteratedType);
             }
-            // Use an array sequence
+            // Tell the deserialization context about an array with the ids in it
             Id arrayId = nextId("for array of ArraySequence (id = ``sequenceId``)");
             dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
             Id sizeId = nextId("for size of ArraySequence (id = ``sequenceId``)");
@@ -163,16 +176,10 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, sequenceId, Id nextId(S
                 dc.element(arrayId, index, e);
                 index++;
             }
-            // XXX very ugly loss of encapsulation here
-            // we have to build in knowledge of the members of ArraySequence
-            // we'd have to do the same thing to support Tuple etc.
-            // we really want to support factory methods, but those will
-            // require support from the SAPI so that arguments are fully constructed before
-            // use => toposort. But that would permit serialization of classes 
-            // which were not annotated serializable, which would be pretty neat.
+            // Use arraySequence() to instantiate an ArraySequence based on this array
+            dc.factory(sequenceId, arraySequence);
+            dc.arguments(sequenceId, [arrayId]);
             value arraySequenceType = `class ArraySequence`.classApply<Anything,Nothing>(iteratedType);
-            dc.instance(sequenceId, arraySequenceType);
-            dc.attribute(sequenceId, `class ArraySequence`.getDeclaredMemberDeclaration<ValueDeclaration>("array") else nothing, arrayId);
             return sequenceId->arraySequenceType;
         }
     }
