@@ -23,9 +23,6 @@ import ceylon.language.serialization {
     serialization,
     uninitializedLateValue
 }
-import com.github.tombentley.typeparser {
-    TypeParser
-}
 
 /*
  I need an explicit type when:
@@ -38,15 +35,25 @@ import com.github.tombentley.typeparser {
 shared String serialize<Instance>(
     rootInstance, 
     pretty = false,
-    TypeNaming typeNaming = TypeExpressionTypeNaming()) {
+    typeNaming = TypeExpressionTypeNaming(),
+    StringSerializer[] userSerializers=[]) {
     "The instance to serialize"
     Instance rootInstance;
     "Whether the returned JSON should be indented"
     Boolean pretty;
-    value em = StringEmitter(pretty);
-    Serializer ss = Serializer(typeNaming);
-    ss.serialize<Instance>(em, rootInstance);
-    return em.string;
+    "How to represent class names in the output JSON"
+    TypeNaming typeNaming;
+    
+    value emitter = StringEmitter(pretty);
+    Serializer serializer = Serializer { 
+        typeNaming = typeNaming; 
+        userSerializers=userSerializers;
+    };
+    serializer.serialize<Instance> { 
+        visitor = emitter; 
+        instance = rootInstance;
+    };
+    return emitter.string;
 }
 
 "Generates ids"
@@ -136,7 +143,8 @@ object inArray extends State(false){}
 see(`function serialize`)
 shared class Serializer(
     TypeNaming typeNaming = TypeExpressionTypeNaming(),
-    Config config = Config()) {
+    Config config = Config(),
+    StringSerializer[] userSerializers=[]) {
     Integer singleReference = -1;
     
     SerializationContext sc = serialization();
@@ -353,7 +361,13 @@ shared class Serializer(
                 is Array<out Anything> instance) {
             arr(state, visitor, ids, staticType, instance);
         } else {
-            obj(state, visitor, ids, staticType, instance);
+            for (userSerializer in userSerializers) {
+                if (userSerializer.serialize(instance, visitor)) {
+                    break;
+                }
+            } else {
+                obj(state, visitor, ids, staticType, instance);
+            }
         }
     }
     
@@ -383,7 +397,8 @@ class Output(Visitor jsonVisitor,
     TypeNaming typeNaming,
     String classKey="class",
     String idKey="#",
-    String idReferencePrefix="@") {
+    String idReferencePrefix="@") 
+        satisfies StringOutput {
     
     State typeWrapper(State state, Type<> type) {
         variable State result = state;
@@ -455,7 +470,7 @@ class Output(Visitor jsonVisitor,
         }
     }
     
-    shared void onString(String string) {
+    shared actual void onString(String string) {
         jsonVisitor.onString(string);
     }
     

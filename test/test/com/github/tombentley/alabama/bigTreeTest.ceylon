@@ -55,7 +55,7 @@ shared void rtWideTree() {
 test
 shared void rtTallTree() {
     //for (i in [2, 2, *(2..8)]) {
-    Integer size = 950;// Any bigger and we SOE during serialization
+    Integer size = 800;// Any bigger and we SOE during serialization
     variable Node n = Node(0, []);
     for (i in 1..size) {
         n = Node(i, [n]);

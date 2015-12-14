@@ -212,7 +212,8 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String 
 }
 
 shared class Deserializer<out Instance>(Type<Instance> clazz, 
-    TypeNaming? typeNaming, String? typeProperty) {
+    TypeNaming? typeNaming, String? typeProperty,
+    StringSerializer[] userDeserializers=[]) {
     
     Config config = Config();
     
@@ -345,6 +346,13 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     return n->`Float`;
                 }
             }
+            for (userDeserializer in userDeserializers) {
+                if (exists r = userDeserializer.deserialize(item)) {
+                    value n = nextId("for string literal encoding float ``item``");
+                    dc.instanceValue(n, r);
+                    return n->type(r);
+                }
+            }
             throw Exception("JSON String \"``item``\" cannot be coerced to ``modelType``");
         }
         case (is Integer) {
@@ -410,9 +418,10 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             switch(item=stream.lookAhead(1))
             case (is ObjectStartEvent|ArrayStartEvent|String|Null|Boolean|Float|Integer) {
                 // TODO val knows the type of the thing it's creating, so we should use that as the et
-                if (builder is ArrayBuilder<Integer>,
+                if (//builder is ArrayBuilder<Integer>,
                     item is ObjectStartEvent, 
                     exists referredId = peekElementRef()) {
+                    // array can contain integers, but contains an object reference 
                     builder.addElement(`Anything`, referredId);
                 } else {
                     value xx = val(false, null, iteratedType(modelType));
@@ -614,9 +623,10 @@ Type<> eliminateNull(Type<> type) {
 }
 
 shared Instance deserialize<Instance>(String json, 
-    TypeNaming typeNaming = TypeExpressionTypeNaming()) {
+    TypeNaming typeNaming = TypeExpressionTypeNaming(),
+    StringSerializer[] userDeserializers=[]) {
     Type<Instance> clazz = typeLiteral<Instance>();
-    Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class");
+    Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class", userDeserializers);
     return deser.deserialize(StreamParser(StringTokenizer(json)));
     
 }

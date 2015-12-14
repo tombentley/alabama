@@ -15,7 +15,17 @@ import ceylon.test {
 
 import com.github.tombentley.alabama {
     deserialize,
-    serialize
+    serialize,
+    StringSerializer,
+    StringOutput,
+    Imports
+}
+import ceylon.language.meta.model {
+    Type
+}
+import com.github.tombentley.typeparser {
+    TypeFormatter,
+    TypeParser
 }
 
 test
@@ -1061,3 +1071,62 @@ shared void rtCollidingAttribute() {
     fail("need to test this");
 }
 */
+
+serializable class ClassWithTypeAttribute(type) {
+    Type<> type;
+    shared actual String string => type.string;
+    shared actual Boolean equals(Object other) {
+        if (is ClassWithTypeAttribute other) {
+            return this.type == other.type;
+        } else {
+            return false;
+        }
+    }
+    
+}
+
+class TypeSerializer(Imports imports=[])
+        satisfies StringSerializer {
+    
+    TypeFormatter formatter = TypeFormatter(imports);
+    TypeParser parser = TypeParser(imports);
+        
+    
+    /* Do I really want to expose Output?
+       This is not typesafe, but how can I make it typesafe
+       with least runtime cost?
+     */
+    
+    shared actual Boolean serialize(Object instance, StringOutput output) {
+        if (is Type<> instance) {
+            output.onString(formatter.format(instance));
+            return true;
+        } else {
+            return false;
+        }
+    }
+    shared actual Object? deserialize(String string) {
+        return parser.parse(string);
+    }
+}
+
+test
+shared void rtClassWithTypeAttribute() {
+    value ts = TypeSerializer([`package ceylon.language`]);
+    value a = ClassWithTypeAttribute(`Integer[2]`);
+    
+    // with static type info
+    variable value json = serialize { 
+        rootInstance = a; 
+        pretty = true; 
+        userSerializers = [ts];
+    };
+    assertEquals(json, """{
+                           "type": "Integer[2]"
+                          }""");
+    value r = deserialize<ClassWithTypeAttribute> { 
+        json = json; 
+        userDeserializers = [ts];
+    };
+    assertEquals(r, a);
+}
