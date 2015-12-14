@@ -362,7 +362,8 @@ shared class Serializer(
             arr(state, visitor, ids, staticType, instance);
         } else {
             for (userSerializer in userSerializers) {
-                if (userSerializer.serialize(instance, visitor)) {
+                if (exists r = userSerializer.serialize(instance)) {
+                    visitor.onString(r);
                     break;
                 }
             } else {
@@ -397,8 +398,7 @@ class Output(Visitor jsonVisitor,
     TypeNaming typeNaming,
     String classKey="class",
     String idKey="#",
-    String idReferencePrefix="@") 
-        satisfies StringOutput {
+    String idReferencePrefix="@") {
     
     State typeWrapper(State state, Type<> type) {
         variable State result = state;
@@ -470,7 +470,7 @@ class Output(Visitor jsonVisitor,
         }
     }
     
-    shared actual void onString(String string) {
+    shared void onString(String string) {
         jsonVisitor.onString(string);
     }
     

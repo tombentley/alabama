@@ -34,9 +34,6 @@ import ceylon.language.serialization {
     DeserializationContext,
     deser=deserialization
 }
-import com.github.tombentley.typeparser {
-    TypeParser
-}
 
 
 

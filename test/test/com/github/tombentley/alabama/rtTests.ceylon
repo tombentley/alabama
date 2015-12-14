@@ -17,7 +17,6 @@ import com.github.tombentley.alabama {
     deserialize,
     serialize,
     StringSerializer,
-    StringOutput,
     Imports
 }
 import ceylon.language.meta.model {
@@ -1097,12 +1096,11 @@ class TypeSerializer(Imports imports=[])
        with least runtime cost?
      */
     
-    shared actual Boolean serialize(Object instance, StringOutput output) {
+    shared actual String? serialize(Object instance) {
         if (is Type<> instance) {
-            output.onString(formatter.format(instance));
-            return true;
+            return formatter.format(instance);
         } else {
-            return false;
+            return null;
         }
     }
     shared actual Object? deserialize(String string) {
