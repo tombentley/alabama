@@ -36,7 +36,7 @@ shared String serialize<Instance>(
     rootInstance, 
     pretty = false,
     typeNaming = TypeExpressionTypeNaming(),
-    StringSerializer[] userSerializers=[]) {
+    UserSerializer[] userSerializers=[]) {
     "The instance to serialize"
     Instance rootInstance;
     "Whether the returned JSON should be indented"
@@ -144,7 +144,7 @@ see(`function serialize`)
 shared class Serializer(
     TypeNaming typeNaming = TypeExpressionTypeNaming(),
     Config config = Config(),
-    StringSerializer[] userSerializers=[]) {
+    UserSerializer[] userSerializers=[]) {
     Integer singleReference = -1;
     
     SerializationContext sc = serialization();
@@ -278,6 +278,39 @@ shared class Serializer(
         visitor.onEndArray(state, s2, staticType, rtType);
     }
     
+    void list(State state, Output visitor,
+        InstanceMap<Integer> ids, 
+        Type<> staticType, 
+        Object instance, {Anything*} elements) {
+        value it = iteratedType(staticType);
+        value rtType = type(instance);
+        value id_ = getId(ids, instance);
+        value s2 = visitor.onStartArray(state, staticType, rtType, id_);
+        markEmitted(id_, ids, instance);
+        // XXX The question here is how to represent a reference within an array
+        // As an object {"@": 42}
+        // XXX Arrays are also identifiable, so how do we represent their id
+        // With a wrapper {"#": 42, value: [...]}
+        for (referred in elements) {
+            if (is Identifiable referred,
+                is Identifiable instance,
+                instance === referred) {
+                // direct cycle: array contains itself!
+                value id2 = getId(ids, instance);
+                Integer byReference = if (id2<0) then -id2 else id2;
+                visitor.onElementReference(byReference);
+            } else {
+                value id2 = getId(ids, referred);
+                if (id2 < 0) {
+                    visitor.onElementReference(-id2);
+                } else {
+                    val(inArray, visitor, ids, it, referred);
+                }
+            }
+        }
+        visitor.onEndArray(state, s2, staticType, rtType);
+    }
+    
     Integer getId(InstanceMap<Integer> ids, Anything r) {
         Integer id;
         if (exists r) {
@@ -362,9 +395,18 @@ shared class Serializer(
             arr(state, visitor, ids, staticType, instance);
         } else {
             for (userSerializer in userSerializers) {
-                if (exists r = userSerializer.serialize(instance)) {
-                    visitor.onString(r);
-                    break;
+                switch (userSerializer) 
+                case (is StringSerializer) {
+                    if (exists r = userSerializer.serialize(instance)) {
+                        visitor.onString(r);
+                        break;
+                    }
+                } 
+                case (is ArraySerializer) {
+                    if (exists elements = userSerializer.serialize(instance)) {
+                        list(state, visitor, ids, staticType, instance, elements);
+                        break;
+                    }
                 }
             } else {
                 obj(state, visitor, ids, staticType, instance);

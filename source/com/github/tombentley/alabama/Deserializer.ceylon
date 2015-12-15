@@ -208,9 +208,59 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String 
     }
 }
 
+
+class UserContainerBuilder<Id>(ArraySerializer ls,
+    DeserializationContext<Id> dc, sequenceId, Id nextId(String s)) 
+        satisfies ContainerBuilder<Id> 
+        given Id satisfies Object {
+    
+    Id sequenceId;
+    
+    ArrayList<Id> elements = ArrayList<Id>();
+     
+    ArrayList<Type<>> elementTypes = ArrayList<Type<>>();
+    
+    shared actual void addElement(Type<> elementType, Id elementId) {
+        elements.add(elementId);
+        elementTypes.add(elementType);
+    }
+    
+    shared actual Id->ClassModel<> instantiate(
+        "A hint at the type originating from the metamodel"
+        Type<> modelHint) { 
+        variable Type<Anything> iteratedType = `Nothing`;
+        for (et in elementTypes) {
+            iteratedType = et.union(iteratedType);
+        }
+        // Tell the deserialization context about an array with the ids in it
+        Id arrayId = nextId("for array of ``ls`` (id = ``sequenceId``)");
+        dc.instance(arrayId, `class Array`.classApply<Anything,Nothing>(iteratedType));
+        Id sizeId = nextId("for size of ``ls`` (id = ``sequenceId``)");
+        dc.instanceValue(sizeId, elements.size);
+        dc.attribute(arrayId, `value Array.size`, sizeId);
+        variable value index = 0;
+        for (e in elements) {
+            dc.element(arrayId, index, e);
+            index++;
+        }
+        // Use arraySequence() to instantiate an ArraySequence based on this array
+        assert (is Anything(*Nothing) fn=`function promote`.invoke([package.iteratedType(modelHint)], ls));
+        dc.factory(sequenceId, fn);// isn't this a generic function reference???
+        dc.arguments(sequenceId, [arrayId]);
+        return sequenceId->`Anything`;// TODO We don't know the metatype 
+        // for the type that the serializer will produce. Hmmm. 
+    }
+}
+
+"Work around for #4465"
+suppressWarnings("unusedDeclaration")
+Anything(*Nothing) promote<T>(ArraySerializer ls) {
+    return ls.deserialize<String>;
+}
+
 shared class Deserializer<out Instance>(Type<Instance> clazz, 
     TypeNaming? typeNaming, String? typeProperty,
-    StringSerializer[] userDeserializers=[]) {
+    UserSerializer[] userDeserializers=[]) {
     
     Config config = Config();
     
@@ -344,10 +394,15 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 }
             }
             for (userDeserializer in userDeserializers) {
-                if (exists r = userDeserializer.deserialize(item)) {
-                    value n = nextId("for string literal encoding float ``item``");
-                    dc.instanceValue(n, r);
-                    return n->type(r);
+                switch (userDeserializer) 
+                case (is StringSerializer) {
+                    if (exists r = userDeserializer.deserialize(item)) {
+                        value n = nextId("for string literal encoding float ``item``");
+                        dc.instanceValue(n, r);
+                        return n->type(r);
+                    }
+                } else {
+                    
                 }
             }
             throw Exception("JSON String \"``item``\" cannot be coerced to ``modelType``");
@@ -408,8 +463,23 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         if (is Class<> modelType,
                 modelType.declaration == `class Array`) {
             builder = ArrayBuilder<Integer>(dc, id else nextId("for array literal encoding Array"), nextId);
-        } else {
+        } else if (modelType.subtypeOf(`Sequential<Anything>`)){
             builder = SequenceBuilder<Integer>(dc, id else nextId("for array literal encoding Sequence"), nextId);
+        } else {
+            for (userDeserializer in userDeserializers) {
+                switch (userDeserializer)
+                case (is ArraySerializer) {
+                    builder = UserContainerBuilder<Integer>(userDeserializer, dc, id else nextId("for array literal encoding ``userDeserializer``"), nextId);
+                    break;
+                    /*value r = userDeserializer.deserialize(item);
+                    value n = nextId("for string literal encoding float ``item``");
+                    dc.instanceValue(n, r);
+                    return n->type(r);*/
+                } else {}
+            } else {
+                throw;
+            }
+            
         }
         while (true) {
             switch(item=stream.lookAhead(1))
@@ -621,7 +691,7 @@ Type<> eliminateNull(Type<> type) {
 
 shared Instance deserialize<Instance>(String json, 
     TypeNaming typeNaming = TypeExpressionTypeNaming(),
-    StringSerializer[] userDeserializers=[]) {
+    UserSerializer[] userDeserializers=[]) {
     Type<Instance> clazz = typeLiteral<Instance>();
     Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class", userDeserializers);
     return deser.deserialize(StreamParser(StringTokenizer(json)));
