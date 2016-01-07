@@ -31,6 +31,8 @@ import ceylon.language.serialization {
     it couldn't be infered from the model) 
  */
 
+shared alias UserSerializer=><StringSerializer<Nothing>|ArraySerializer<Nothing>>;
+
 "A utility for serializing an instance to a JSON-formatted String."
 shared String serialize<Instance>(
     rootInstance, 
@@ -368,7 +370,7 @@ shared class Serializer(
                 }
             }
         }
-        visitor.onEndObject(state, s2, if (modelType != clazz) then clazz else null);
+        visitor.onEndObject();
     }
     
     "Serialize a value, recursively for objects and arrays"
@@ -381,7 +383,7 @@ shared class Serializer(
         } else if (is Integer|Float instance) {
             visitor.onNumber(state, instance, staticType);
         } else if (is String instance) {
-            visitor.onString(instance.string);
+            visitor.onString(instance);
         } else if (is Character instance) {
             visitor.onCharacter(state, instance, staticType);
         } else if (is Boolean instance) {
@@ -395,15 +397,16 @@ shared class Serializer(
             arr(state, visitor, ids, staticType, instance);
         } else {
             for (userSerializer in userSerializers) {
-                switch (userSerializer) 
-                case (is StringSerializer) {
-                    if (exists r = userSerializer.serialize(instance)) {
-                        visitor.onString(r);
+                //switch (userSerializer) 
+                if (is StringSerializer<Nothing> userSerializer) {
+                    assert (is Boolean b=`function promoteStringSerializer`.invoke([type(instance), staticType], visitor, userSerializer, state, instance, staticType));
+                    if (b) {
                         break;
                     }
                 } 
-                case (is ArraySerializer) {
-                    if (exists elements = userSerializer.serialize(instance)) {
+                else {//case (is ArraySerializer<Anything,Nothing>) {
+                    assert (is {Anything*}? elements=`function promoteArraySerializer`.invoke([type(instance)], visitor, userSerializer, instance));
+                    if (exists elements) {
                         list(state, visitor, ids, staticType, instance, elements);
                         break;
                     }
@@ -433,6 +436,30 @@ shared class Serializer(
     }
 }
 
+Boolean promoteStringSerializer<T,S>(Output visitor, StringSerializer<Nothing> userSerializer, State state, T instance, Type<> staticType) {
+    if (is StringSerializer<T> userSerializer) {
+        variable State s2 = state;
+        if (!is StringSerializer<S> userSerializer) {
+            s2 = visitor.typeWrapper(s2, userSerializer.type);
+            s2 = visitor.valueWrapper(s2);
+        }
+        visitor.onString(userSerializer.serialize(instance));
+        if (s2 == inWrapper) {
+            visitor.onEndObject();
+        }
+        return true;
+    }
+    return false;
+}
+{Anything*}? promoteArraySerializer<Container, Element>(Output visitor, ArraySerializer<Nothing> userSerializer, Container<Element> instance) 
+        given Container<Element2> {
+    if (is ArraySerializer<Container> userSerializer) {
+        if (exists elements = userSerializer.enumerate<Element>(instance)) {
+            return elements;
+        }
+    }
+    return null;
+}
 
 "Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
  [[Output]]."
@@ -442,7 +469,7 @@ class Output(Visitor jsonVisitor,
     String idKey="#",
     String idReferencePrefix="@") {
     
-    State typeWrapper(State state, Type<> type) {
+    shared State typeWrapper(State state, Type<> type) {
         variable State result = state;
         if (!state.o) {
             jsonVisitor.onStartObject();
@@ -465,7 +492,7 @@ class Output(Visitor jsonVisitor,
         return result;
     }
     
-    State valueWrapper(State state) {
+    shared State valueWrapper(State state) {
         variable State result = state;
         if (!state.o) {
             jsonVisitor.onStartObject();
@@ -541,7 +568,7 @@ class Output(Visitor jsonVisitor,
         return inObject;
     }
     
-    shared void onEndObject(State state, State s2, ClassModel<>? type) {
+    shared void onEndObject() {
         jsonVisitor.onEndObject();
         //if (s2 == inObject && state != inObject) {
         //    jsonVisitor.onEndObject();

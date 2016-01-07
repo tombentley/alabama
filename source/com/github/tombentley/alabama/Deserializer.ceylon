@@ -19,7 +19,10 @@ import ceylon.language.meta {
     typeLiteral
 }
 import ceylon.language.meta.declaration {
-    ValueDeclaration
+    ValueDeclaration,
+    ClassOrInterfaceDeclaration,
+    ClassDeclaration,
+    OpenClassType
 }
 import ceylon.language.meta.model {
     Class,
@@ -35,6 +38,7 @@ import ceylon.language.serialization {
     deser=deserialization
 }
 
+shared alias UserDeserializer => <StringDeserializer<Anything>|ArrayDeserializer<<X>=>Anything>>;
 
 
 // XXX TODO I think this can be inlines into the Deserializer
@@ -209,10 +213,11 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String 
 }
 
 
-class UserContainerBuilder<Id>(ArraySerializer ls,
+class UserContainerBuilder<Id, Container>(ArrayDeserializer<Container> ls,
     DeserializationContext<Id> dc, sequenceId, Id nextId(String s)) 
         satisfies ContainerBuilder<Id> 
-        given Id satisfies Object {
+        given Id satisfies Object 
+        given Container<Element> {
     
     Id sequenceId;
     
@@ -245,22 +250,25 @@ class UserContainerBuilder<Id>(ArraySerializer ls,
         }
         // Use arraySequence() to instantiate an ArraySequence based on this array
         assert (is Anything(*Nothing) fn=`function promote`.invoke([package.iteratedType(modelHint)], ls));
-        dc.factory(sequenceId, fn);// isn't this a generic function reference???
+        dc.factory(sequenceId, fn);
         dc.arguments(sequenceId, [arrayId]);
         return sequenceId->`Anything`;// TODO We don't know the metatype 
         // for the type that the serializer will produce. Hmmm. 
     }
 }
 
+
 "Work around for #4465"
 suppressWarnings("unusedDeclaration")
-Anything(*Nothing) promote<T>(ArraySerializer ls) {
-    return ls.deserialize<String>;
+Container<Element>(*Nothing) promote<Container,Element>(ArrayDeserializer<Container> ls) 
+        given Container<Element> {
+    return ls.deserialize<Element>;
 }
+
 
 shared class Deserializer<out Instance>(Type<Instance> clazz, 
     TypeNaming? typeNaming, String? typeProperty,
-    UserSerializer[] userDeserializers=[]) {
+    UserDeserializer[] userDeserializers=[]) {
     
     Config config = Config();
     
@@ -357,6 +365,14 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         return null;
     }
     
+    Exception coercionException(String jsonType, Anything item, Type<> ceylonType, Anything deserializer=null, Exception? cause=null) {
+        variable String msg = "JSON ``jsonType`` \"``item else "null"``\" cannot be coerced to ``ceylonType``";
+        if (exists deserializer) {
+            msg = "``msg`` using deserializer ``deserializer``";
+        }
+        return Exception(msg, cause);
+    }
+    
     "Peek at the next event in the stream and return the instance for it"
     Integer->ClassModel<> val(Boolean wrapper, Integer? id, Type<> modelType) {
         //print("val(modelType=``modelType``)");
@@ -394,18 +410,20 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 }
             }
             for (userDeserializer in userDeserializers) {
-                switch (userDeserializer) 
-                case (is StringSerializer) {
-                    if (exists r = userDeserializer.deserialize(item)) {
-                        value n = nextId("for string literal encoding float ``item``");
-                        dc.instanceValue(n, r);
-                        return n->type(r);
+                if (is StringDeserializer<Anything> userDeserializer,
+                    type(userDeserializer).subtypeOf(`interface StringDeserializer`.interfaceApply<Anything>(modelType))) {
+                    Anything r;
+                    try {
+                        r = userDeserializer.deserialize(item);
+                    } catch (Exception e) {
+                        throw coercionException("String", item, modelType, userDeserializer, e);
                     }
-                } else {
-                    
+                    value n = nextId("for string literal encoding float ``item``");
+                    dc.instanceValue(n, r);
+                    return n->type(r);
                 }
             }
-            throw Exception("JSON String \"``item``\" cannot be coerced to ``modelType``");
+            throw coercionException("String", item, modelType);
         }
         case (is Integer) {
             stream.next();
@@ -415,7 +433,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 dc.instanceValue(n, item);
                 return n->`Integer`;
             }
-            throw Exception("JSON Number ``item`` cannot be coerced to ``modelType``");
+            throw coercionException("Number", item, modelType);
         }
         case (is Float) {
             stream.next();
@@ -425,7 +443,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 dc.instanceValue(n, item);
                 return n->`Float`;
             }
-            throw Exception("JSON Number ``item`` cannot be coerced to ``modelType``");
+            throw coercionException("Number", item, modelType);
         }
         case (is Boolean) {
             stream.next();
@@ -436,7 +454,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 dc.instanceValue(n, item);
                 return n->`Boolean`;
             }
-            throw Exception("JSON Boolean ``item`` cannot be coerced to ``modelType``");
+            throw coercionException("Boolean", item, modelType);
         }
         case (is Null) {
             stream.next();
@@ -446,7 +464,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 dc.instanceValue(n, item);
                 return n->`Null`;
             }
-            throw Exception("JSON Null null cannot be coerced to ``modelType``");
+            throw coercionException("Null", null, modelType);
         }
         else {
             throw Exception("Unexpected event ``item``");
@@ -467,19 +485,23 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             builder = SequenceBuilder<Integer>(dc, id else nextId("for array literal encoding Sequence"), nextId);
         } else {
             for (userDeserializer in userDeserializers) {
-                switch (userDeserializer)
-                case (is ArraySerializer) {
-                    builder = UserContainerBuilder<Integer>(userDeserializer, dc, id else nextId("for array literal encoding ``userDeserializer``"), nextId);
-                    break;
+                if (is ArrayDeserializer<<X>=>Anything> userDeserializer) {
+                    if (is ClassOrInterface modelType,
+                        inherits(userDeserializer.selector, modelType.declaration)) {
+                        builder = UserContainerBuilder<Integer,<X>=>Anything>(userDeserializer, dc, id else nextId("for array literal encoding ``userDeserializer``"), nextId);
+                        break;
+                        
+                    }
                     /*value r = userDeserializer.deserialize(item);
                     value n = nextId("for string literal encoding float ``item``");
                     dc.instanceValue(n, r);
                     return n->type(r);*/
-                } else {}
+                }
             } else {
-                throw;
+                throw Exception("JSON Array cannot be transformed to ``modelType``");
+                // need to handle Singleton special case better instead of this
+                //builder = SequenceBuilder<Integer>(dc, id else nextId("for array literal encoding Sequence"), nextId);
             }
-            
         }
         while (true) {
             switch(item=stream.lookAhead(1))
@@ -516,7 +538,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         //print("obj(modelType=``modelType``)");
         assert(stream.next() is ObjectStartEvent);// consume initial {
         value dataType=peekClass();
-        Class<Object> clazz = bestType(eliminateNull(modelType), eliminateNull(dataType));
+        Type<> clazz = dataType == `Nothing` then bestType(eliminateNull(modelType), eliminateNull(dataType)) else dataType;
         value id = peekId() else nextId("for object encoding ``dataType``");
         value isValue = peekValue();
         
@@ -526,6 +548,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
             stream.next();// consume the end of the wrapper object
             return result;
         }
+        assert(is Class<Object> clazz);
         Builder<Integer> builder = Builder<Integer>(dc, clazz, id);// TODO reuse a single instance?
         variable Attribute<>? attribute = null;
         variable Boolean byRef = false;
@@ -602,15 +625,62 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
     }
 }
 
+"Does x inherit y?"
+Boolean inherits(ClassOrInterfaceDeclaration x, ClassOrInterfaceDeclaration y) {
+    if (x == y) {
+        return true;
+    }
+    if (is ClassDeclaration y) {
+        if (is ClassDeclaration x) {
+            // Go up extendedtype hierarchy
+            variable ClassDeclaration z = x;
+            while (true) {
+                if (y == z) {
+                    return true;
+                }
+                if (exists k=z.extendedType) {
+                    z=k.declaration;
+                } else {
+                    return false;
+                }
+            }
+            
+        } else {
+            // interface cannot inherit class, unless class is Object
+            return y == `class Object`;
+        }
+    } else {
+        // y is an interface
+        if (is ClassDeclaration x) {
+            // check the superclass'es satisfies types
+            variable OpenClassType? z = x.extendedType;
+            if (exists k=z) {
+                if (inherits(k.declaration, y)) {
+                    return true;
+                }
+                //z = k.extendedType;
+            }
+        }
+        // now check the satisfied types
+        for (st in x.satisfiedTypes) {
+            if (inherits(st.declaration, y)) {
+            //if (y == st.declaration) {
+                return true;
+            }
+            
+        }
+        return false;
+    }
+}
 
-Class<Object> bestType(Type<> modelType, Type<> keyType) {
-    Class<Object> clazz;// TODO use hints to figure out an instantiable class
+Type<> bestType(Type<> modelType, Type<> keyType) {
+    Type<> clazz;// TODO use hints to figure out an instantiable class
     if (is Class<Object> k=keyType) {
         clazz = k;
     } else if (is Class<Object> m=modelType) {
         clazz = m;
     } else {
-        clazz = nothing;
+        clazz = modelType.intersection(keyType);
     }
     return clazz;
 }
@@ -620,7 +690,10 @@ Class<Object> bestType(Type<> modelType, Type<> keyType) {
 by("jvasileff")
 Type<Anything> iteratedType(Type<Anything> containerType) {
     if (is ClassOrInterface<Anything> containerType) {
-        if (exists model = containerType.satisfiedTypes
+        if (is Type<Iterable<Anything>> containerType) {
+            assert(exists x=containerType.typeArgumentList.first);
+            return x;
+        } else if (exists model = containerType.satisfiedTypes
                 .narrow<Interface<Iterable<Anything>>>().first,
             exists x = model.typeArgumentList.first) {
             //print("iteratedType(containerType=``containerType``): ``x``");
@@ -691,7 +764,7 @@ Type<> eliminateNull(Type<> type) {
 
 shared Instance deserialize<Instance>(String json, 
     TypeNaming typeNaming = TypeExpressionTypeNaming(),
-    UserSerializer[] userDeserializers=[]) {
+    UserDeserializer[] userDeserializers=[]) {
     Type<Instance> clazz = typeLiteral<Instance>();
     Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class", userDeserializers);
     return deser.deserialize(StreamParser(StringTokenizer(json)));
