@@ -19,8 +19,7 @@ import com.github.tombentley.alabama {
     serialize,
     StringSerializer,
     Imports,
-    ListSerializer,
-    StringDeserializer
+    ListSerializer
 }
 import ceylon.language.meta.model {
     Type
@@ -29,6 +28,7 @@ import com.github.tombentley.typeparser {
     TypeFormatter,
     TypeParser
 }
+
 test
 shared void rtEmptyArray() {
     variable Array<Integer> a = Array<Integer>{};
@@ -412,20 +412,6 @@ shared void rtEmpty() {
     variable String json = serialize([]);
     assertEquals(json, """{"class":"ceylon.language::empty"}""");
     assertEquals(deserialize<[]>(json), []);
-    
-    // without static type info
-    json = serialize<Object>([]);
-    assertEquals(json, """{"class":"ceylon.language::empty"}""");
-    assertEquals(deserialize<Object>(json), []);
-}
-
-test
-shared void rtArrayOfEmptys() {
-    // with static type info
-    variable String json = serialize(Array{[], []});
-    assertEquals(json, """[{"class": "ceylon.language::empty"}, {"class": "ceylon.language::empty"}]""");
-    json = """[{"class": "ceylon.language::empty"}, {"class": "ceylon.language::empty"}]""";
-    assertEquals(deserialize<Array<[]>>(json), Array{[], []});
     
     // without static type info
     json = serialize<Object>([]);
@@ -1087,268 +1073,90 @@ shared void rtCollidingAttribute() {
 }
 */
 
-serializable class ClassWithStringUserTypeAttribute(type, color) {
+serializable class ClassWithTypeAttribute(type) {
     Type<> type;
-    Color color;
-    shared actual String string => "``type`` ``color``";
+    shared actual String string => type.string;
     shared actual Boolean equals(Object other) {
-        if (is ClassWithStringUserTypeAttribute other) {
-            return this.type == other.type && this.color == other.color;
+        if (is ClassWithTypeAttribute other) {
+            return this.type == other.type;
         } else {
             return false;
         }
     }
     
-}
-
-
-class Color(Byte red, Byte green, Byte blue) {
-    void hexDigit(variable Integer y, StringBuilder sb) {
-        value x=y%16;
-        if (x <= 9) {
-            sb.appendCharacter('0'.neighbour(x));
-        } else if (x <=15) {
-            sb.appendCharacter('a'.neighbour(x-10));
-        } else {
-            assert(false);
-        }
-    }
-    
-    String hex(Byte b) {
-        StringBuilder sb = StringBuilder();
-        hexDigit(b.unsigned/16, sb);
-        hexDigit(b.unsigned, sb);
-        return sb.string;
-    }
-    shared actual String string 
-        => "#``hex(red)````hex(green)````hex(blue)``";
-    shared actual Integer hash 
-        => red.hash.leftLogicalShift(16)
-                + green.hash.leftLogicalShift(8)
-                + blue.hash;
-    shared actual Boolean equals(Object other) {
-        if (is Color other) {
-            return red == other.red
-                && green == other.green 
-                && blue == other.blue;
-        } else {
-            return false;
-        }
-    }
-}
-Color? parseColor(String hexRgb) {
-    assert(exists c = hexRgb[0], c == '#');
-    assert(exists red = parseInteger(hexRgb[1..2], 16));
-    assert(exists green = parseInteger(hexRgb[3..4], 16));
-    assert(exists blue = parseInteger(hexRgb[5..6], 16));
-    return Color(red.byte, green.byte, blue.byte);
-}
-
-class ColorSerializer() 
-        satisfies StringSerializer<Color> & StringDeserializer<Color> {
-    shared actual Color deserialize(String string) {
-        assert(exists r = parseColor(string));
-        return r;
-    }
-    
-    shared actual String serialize(Color instance) 
-        => instance.string;
 }
 
 class TypeSerializer(Imports imports=[])
-        satisfies StringSerializer<Type<>> & StringDeserializer<Type<>> {
+        satisfies StringSerializer {
     
     TypeFormatter formatter = TypeFormatter(imports);
     TypeParser parser = TypeParser(imports);
+        
     
-    shared actual String serialize(Type<> instance) {
-        return formatter.format(instance);
-    }
-    shared actual Type<> deserialize(String string) {
-        value x = parser.parse(string);
-        if (is Type<> x) {
-            return x;
+    /* Do I really want to expose Output?
+       This is not typesafe, but how can I make it typesafe
+       with least runtime cost?
+     */
+    
+    shared actual String? serialize(Object instance) {
+        if (is Type<> instance) {
+            return formatter.format(instance);
         } else {
-            throw x;
+            return null;
         }
     }
+    shared actual Object? deserialize(String string) {
+        return parser.parse(string);
+    }
 }
 
 test
-shared void rtClassWithStringUserTypeAttribute() {
-    value stringSerializers = [
-        TypeSerializer([`package ceylon.language`]),
-        ColorSerializer()
-    ];
-    value a = ClassWithStringUserTypeAttribute(`Integer[2]`, Color(255.byte, 255.byte, 255.byte));
+shared void rtClassWithTypeAttribute() {
+    value ts = TypeSerializer([`package ceylon.language`]);
+    value a = ClassWithTypeAttribute(`Integer[2]`);
     
     // with static type info
     variable value json = serialize { 
         rootInstance = a; 
         pretty = true; 
-        userSerializers = stringSerializers;
+        userSerializers = [ts];
     };
     assertEquals(json, """{
-                           "type": "Integer[2]",
-                           "color": "#ffffff"
+                           "type": "Integer[2]"
                           }""");
-    value r = deserialize<ClassWithStringUserTypeAttribute> { 
+    value r = deserialize<ClassWithTypeAttribute> { 
         json = json; 
-        userDeserializers = stringSerializers;
+        userDeserializers = [ts];
     };
     assertEquals(r, a);
-    
-    // Try the same thing, but not in an object
-    variable value col = Color(0.byte, 128.byte, 128.byte);
-    json = serialize { 
-        rootInstance = col; 
-        pretty = true; 
-        userSerializers = stringSerializers;
-    };
-    assertEquals(json, """"#008080"""");
-    variable Object col2 = deserialize<Color> { 
-        json = json; 
-        userDeserializers = stringSerializers;
-    };
-    assertEquals(col2, col);
-    
-    // and again, but with a different static type
-    col = Color(0.byte, 128.byte, 128.byte);
-    json = serialize<Object> { 
-        rootInstance = col; 
-        pretty = true; 
-        userSerializers = stringSerializers;
-    };
-    assertEquals(json, """{
-                           "class": "test.com.github.tombentley.alabama::Color",
-                           "value": "#008080"
-                          }""");
-    col2 = deserialize<Object> { 
-        json = json; 
-        userDeserializers = stringSerializers;
-    };
-    assertEquals(col2, col);
-    
-    value typ = `Set<String>`;
-    json = serialize<Object> { 
-        rootInstance = typ; 
-        pretty = true; 
-        userSerializers = stringSerializers;
-    };
-    assertEquals(json, """{
-                           "class": "ceylon.language.meta.model::Type<ceylon.language::Anything>",
-                           "value": "Set<String>"
-                          }""");
-    value typ2 = deserialize<Object> { 
-        json = json; 
-        userDeserializers = stringSerializers;
-    };
-    assertEquals(typ2, typ);
 }
 
-serializable class ClassWithArrayUserTypeAttribute<Element>(arrayList, mutableList, list, iterable) {
-    shared ArrayList<Element> arrayList;
-    shared MutableList<Element> mutableList;
-    shared List<Element> list;
-    shared {Element*} iterable;
+serializable class ClassWithArrayList<Element>() {
+    shared MutableList<Element> list = ArrayList<Element>();
 }
-
-ArrayList<Element> make<Element>(List<Element> elements) {
-    return ArrayList<Element>{*elements};
-}
-
 test
-shared void rtClassWithArrayUserTypeAttribute() {
-    value a = ClassWithArrayUserTypeAttribute<String>(
-        ArrayList<String>{"1", "2"}, 
-        ArrayList<String>{"foo", "bar"}, 
-        ArrayList<String>{"baz", "gee"}, 
-        ArrayList<String>{"lala", "po"});
+shared void rtClassWithListAttribute() {
+    value a = ClassWithArrayList<String>();
+    a.list.add("foo");
+    a.list.add("bar");
     
-    value ls = [ListSerializer(`class ArrayList`, `function make`)];
+    value ls = ListSerializer();
     // with static type info
     variable value json = serialize { 
         rootInstance = a; 
         pretty = true; 
-        userSerializers = ls;
+        userSerializers = [ls];
     };
     assertEquals(json, """{
-                           "arrayList": [
-                            "1",
-                            "2"
-                           ],
-                           "mutableList": [
+                           "list": [
                             "foo",
                             "bar"
-                           ],
-                           "list": [
-                            "baz",
-                            "gee"
-                           ],
-                           "iterable": [
-                            "lala",
-                            "po"
                            ]
                           }""");
     
-    value r = deserialize<ClassWithArrayUserTypeAttribute<String>> { 
+    value r = deserialize<ClassWithArrayList<String>> { 
         json = json; 
-        userDeserializers = ls;
-    };
-    assertEquals(r.list, a.list);
-}
-
-
-test
-shared void rtClassWithArrayUserTypeAttribute2() {
-    value a = ClassWithArrayUserTypeAttribute<Type<>|Color>(
-        ArrayList<Type<>|Color>{`String`}, 
-        ArrayList<Type<>|Color>{Color(0.byte, 0.byte, 0.byte)}, 
-        ArrayList<Type<>|Color>{`Set<Boolean>`}, 
-        ArrayList<Type<>|Color>{`Character|String`});
-    
-    value ls = [
-        ListSerializer(`class ArrayList`, `function make`),
-        TypeSerializer([`package ceylon.language`]),
-        ColorSerializer()
-    ];
-    
-    // with static type info
-    variable value json = serialize { 
-        rootInstance = a; 
-        pretty = true; 
-        userSerializers = ls;
-    };
-    assertEquals(json, """{
-                           "arrayList": [
-                            {
-                             "class": "ceylon.language.meta.model::Type<ceylon.language::Anything>",
-                             "value": "String"
-                            }
-                           ],
-                           "mutableList": [
-                            {
-                             "class": "test.com.github.tombentley.alabama::Color",
-                             "value": "#000000"
-                            }
-                           ],
-                           "list": [
-                            {
-                             "class": "ceylon.language.meta.model::Type<ceylon.language::Anything>",
-                             "value": "Set<Boolean>"
-                            }
-                           ],
-                           "iterable": [
-                            {
-                             "class": "ceylon.language.meta.model::Type<ceylon.language::Anything>",
-                             "value": "Character|String"
-                            }
-                           ]
-                          }""");
-    
-    value r = deserialize<ClassWithArrayUserTypeAttribute<Type<>|Color>> { 
-        json = json; 
-        userDeserializers = ls;
+        userDeserializers = [ls];
     };
     assertEquals(r.list, a.list);
 }
