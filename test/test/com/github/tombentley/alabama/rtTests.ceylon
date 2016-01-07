@@ -1,8 +1,7 @@
 import ceylon.collection {
     ArrayList,
     LinkedList,
-    HashMap,
-    MutableList
+    HashMap
 }
 import ceylon.language.meta {
     type,
@@ -18,8 +17,7 @@ import com.github.tombentley.alabama {
     deserialize,
     serialize,
     StringSerializer,
-    Imports,
-    ListSerializer
+    Imports
 }
 import ceylon.language.meta.model {
     Type
@@ -1129,34 +1127,4 @@ shared void rtClassWithTypeAttribute() {
         userDeserializers = [ts];
     };
     assertEquals(r, a);
-}
-
-serializable class ClassWithArrayList<Element>() {
-    shared MutableList<Element> list = ArrayList<Element>();
-}
-test
-shared void rtClassWithListAttribute() {
-    value a = ClassWithArrayList<String>();
-    a.list.add("foo");
-    a.list.add("bar");
-    
-    value ls = ListSerializer();
-    // with static type info
-    variable value json = serialize { 
-        rootInstance = a; 
-        pretty = true; 
-        userSerializers = [ls];
-    };
-    assertEquals(json, """{
-                           "list": [
-                            "foo",
-                            "bar"
-                           ]
-                          }""");
-    
-    value r = deserialize<ClassWithArrayList<String>> { 
-        json = json; 
-        userDeserializers = [ls];
-    };
-    assertEquals(r.list, a.list);
 }
