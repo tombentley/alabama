@@ -623,6 +623,7 @@ Type<> eliminateNull(Type<> type) {
     }
 }
 
+"Deserialize the given serial"
 shared Instance deserialize<Instance>(String json, 
     TypeNaming typeNaming = TypeExpressionTypeNaming(),
     StringSerializer[] userDeserializers=[],

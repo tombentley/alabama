@@ -56,8 +56,12 @@ trying to achieve.
     
 * You need "long term persistence"
 
-    - Alabama is still evolving, and does not support schema evolution, so 
+    - Alabama is still evolving, so 
       the JSON emitted might change even if your classes do not.
+    - Alabama does not support schema evolution, so even if Alabama's 
+      serialized forms don't change, changes to your classes (or 3rd party 
+      classes which are present in your instance graph) will mean you 
+      can no longer parse "old" JSON. 
 
 * You're in an all-Ceylon world, or there are no existing consumers for 
   your JSON and you're not super bothered about controlling every aspect of 
@@ -75,6 +79,10 @@ trying to achieve.
 [JSER]: https://docs.oracle.com/javase/tutorial/essential/io/objectstreams.html
 [JSON]: https://tools.ietf.org/html/rfc7159
 [SAPI]: https://modules.ceylon-lang.org/repo/1/ceylon/language/1.2.0/module-doc/api/index.html
+
+## Serialized form
+
+This is discussed [here](serialized-form)
 
 ## Example
 
@@ -104,7 +112,3 @@ OK, here's some Ceylon code:
     String json = serialize(p);
     Person p2 = deserialize<Person>(json);
 
-
-And in case you're interested, this is what the JSON looks like:
-
-TODO!!!

@@ -6,7 +6,7 @@
    instance graphs.
    
    The API offered by this module is to serialize/deserialize a 
-   single instance, called the root instance. In practice this is 
+   single instance, called the *root* instance. In practice this is 
    not really a limitation because you can always serialize a single 
    sequence of several other instances. 
    

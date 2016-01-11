@@ -55,7 +55,7 @@ there are 3 which cannot be directly represented as a JSON
  `-infinity` and "undefined" (a.k.a. NaN, the result of computations such 
  as 0.0/0.0).
  
- In order to be able to consume the JSON and we need a way to represent 
+ In order to be able to serialize these values and we need a way to represent 
  these values in JSON. To do that we use an object wrapper, here's infinity:
  
      {
@@ -119,10 +119,10 @@ The `"class"` key is configurable, as is the invertible mapping used to
 transform the type `Person` to a `String`. In the above example 
 we used `"example.package::Person"`, 
 but if all the classes in the serialized form came from a single package 
-we might have used `"Person"`, for example. 
+we might have configured the serialize to use just `"Person"`, for example. 
 
-Currently the `"class"` key has to be *first* in the JSON object 
-so the type information can be used to infer the types of the attributes 
+Note: the `"class"` key has to be *first* in the JSON object 
+so that the type information can be used to infer the types of the attributes 
 corresponding to other keys. This prevents the need to have to read the 
 whole JSON tree into memory before deserialization can start.
 
@@ -192,8 +192,11 @@ So if John's manager is Jane we might end up with this:
       "manager@": 123
     }
     
-In general we can't just say `"manager": 123` because the type of the `manager`
-reference might be `Integer|Person`, and then `"manager": 123` is ambiguous.
+(If you're wondering why we need to ugly `@` suffix and why we can't just 
+say `"manager": 123` it's because *in general* the type of the `manager`
+reference might be `Integer|Person`, and then `"manager": 123` is ambiguous:
+Is the value of `manager` suppose to be the `Integer` 123 or the object 
+with the id 123?)
 
 **Note:** we only emit an instance's identity if 
 that instance is referenced more than once.
@@ -225,7 +228,7 @@ could be mapped to arrays.
 ## Id wrapper
 
 As we discussed when talking about object identity,
-for a Ceylon instance is serialized to a JSON object we can always use a JSON 
+when a Ceylon instance is serialized to a JSON object we can always use a JSON 
 property to attach the instance's identity:
 
     {
@@ -234,7 +237,7 @@ property to attach the instance's identity:
     }
 
 but this is not possible when the 
-Ceylon instance is serialized to a JSON *array*, because in JSONO syntax arrays 
+Ceylon instance is serialized to a JSON *array*, because in JSON syntax arrays 
 only contain elements. (Note how we don't need to 
 worry about things which serialize to JSON strings, numbers, true, false or 
 null, because none of the Ceylon values which map to these things are 
@@ -250,7 +253,7 @@ two distinct but equal `Sequence`s of the same type get serialized and upon
 deserialization are represented by a single instance there's no way that can 
 alter program semantics.
 
-Arrays are `Identifiable`, however, so we might need to encode their 
+Arrays *are* `Identifiable`, however, so we might need to encode their 
 identity.
 
 We use an "identity wrapper":
@@ -265,24 +268,6 @@ That's the serialized form for an array `Array("hello", "world")`.
 We only use such identity wrappers where we have to (that is, when the array 
 is referenced more than once).
 
-## Reference element
-
-## Collections with identity
-
-Firstly note that collections aren't always `Identifiable` (in the Ceylon 
-sense). This is true of the `Sequential` classes. Since `[1,2,3]` is 
-immutable its identity doesn't matter. 
-
-However, there a plenty of collections with a meaningful identity, including
-`Array`, so we still need a way to encode the identity of things which otherwise
-would get encoded as plain JSON arrays. To do this we use a wrapper JSON 
-object:
-
-    { 
-      "#": 456,
-      "value": [1, 2, 3]
-    }
-
 ## Collections with identity-referencing elements
 
 And what about a collection element referencing an instance by identity? 
@@ -290,11 +275,7 @@ Well for that we also use a wrapper JSON object:
 
     [{"@": 456}]
     
-
-# Wrappers
-
-
-
-
-## Type wrapper
-
+The above example might be emitted when a an `Array` contains a single 
+element that's already been emitted in the serialized form and was given id
+456.
+ 
