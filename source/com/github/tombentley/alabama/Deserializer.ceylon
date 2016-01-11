@@ -208,13 +208,17 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String 
     }
 }
 
-shared class Deserializer<out Instance>(Type<Instance> clazz, 
-    TypeNaming? typeNaming, String? typeProperty,
-    StringSerializer[] userDeserializers=[]) {
+shared class Deserializer<out Instance>(
+    Type<Instance> clazz, 
+    TypeNaming? typeNaming, 
+    String? typeProperty,
+    StringSerializer[] userDeserializers=[],
+    "Predicate for whether instantiation of the given `clazz` is permitted."
+    Boolean whitelisted(ClassModel<> clazz) => true) {
     
     Config config = Config();
     
-    value dc = deser<Integer>();
+    value dc = deser<Integer>(whitelisted);
     variable value id_ = 0;
     Integer nextId(String s) {
         value id = this.id_;
@@ -621,9 +625,11 @@ Type<> eliminateNull(Type<> type) {
 
 shared Instance deserialize<Instance>(String json, 
     TypeNaming typeNaming = TypeExpressionTypeNaming(),
-    StringSerializer[] userDeserializers=[]) {
+    StringSerializer[] userDeserializers=[],
+    "Predicate for whether instantiation of the given `clazz` is permitted."
+    Boolean whitelisted(ClassModel<> clazz) => true) {
     Type<Instance> clazz = typeLiteral<Instance>();
-    Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class", userDeserializers);
+    Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class", userDeserializers, whitelisted);
     return deser.deserialize(StreamParser(StringTokenizer(json)));
     
 }
