@@ -1,6 +1,10 @@
 import ceylon.collection {
     HashMap,
-    IdentityMap
+    IdentityMap,
+    HashSet,
+    Stability,
+    Hashtable,
+    unlinked
 }
 import ceylon.json {
     Visitor,
@@ -21,10 +25,17 @@ import ceylon.language.serialization {
     Outer,
     Element,
     serialization,
-    uninitializedLateValue
+    uninitializedLateValue,
+    References
 }
 import com.github.tombentley.typeparser {
     TypeParser
+}
+import ceylon.language.meta.declaration {
+    ValueDeclaration,
+    ClassOrInterfaceDeclaration,
+    ClassDeclaration,
+    OpenClassOrInterfaceType
 }
 
 /*
@@ -281,11 +292,28 @@ shared class Serializer(
         return id;
     }
     
-    "The string to use as a key for an object that refers to 
-     the given referent directly."
-    function makeKeyName(Member referent) {
-        value attribute = referent.attribute;
-        return config.attribute(attribute)?.key else attribute.name;
+    /*Boolean inherits(ClassOrInterfaceDeclaration c1, ClassOrInterfaceDeclaration c2) {
+        variable ClassOrInterfaceDeclaration c = c1;
+        while (true) {
+            if (c == c2) {
+                return true;
+            }
+            if (exists et = c.extendedType) {
+                c = et.declaration;
+            } else {
+                return false;
+            }
+        }
+    }*/
+    
+    
+    
+    Map<Item,Key> invertMap<Key,Item>(Map<Key,Item> map) given Item satisfies Object {
+        HashMap<Item,Key> result = HashMap<Item,Key>(unlinked, Hashtable(map.size));
+        for(key->item in map) {
+            result.put(item,key);
+        }
+        return result;
     }
     
     "Ceylon Objects are serialized as JSON hashes (objects)."
@@ -297,11 +325,12 @@ shared class Serializer(
         value clazz = type(instance);
         value s2 = visitor.onStartObject(state, id_, if (modelType != clazz) then clazz else null);
         markEmitted(id_, ids, instance);
-        
         if (clazz.declaration.anonymous) {
             // there's no state we care about, XXX unless it's a member!
         } else {//serializable, hopefully
-            for (ref in sc.references(instance)) {
+            value references = sc.references(instance);
+            value keyNames = invertMap(config.makeKeyNames(references*.key.narrow<Member>()*.attribute));
+            for (ref in references) {
                 value referent = ref.key;
                 switch (referent)
                 case (is Member) {
@@ -310,10 +339,11 @@ shared class Serializer(
                     }
                     value refId = getId(ids, ref.item);
                     Integer byReference = if (refId<0) then -refId else refId;
+                    assert(exists key = keyNames[referent.attribute]);
                     if (refId < 0) { // ref occurs > 1, but it's already been omitted
-                        visitor.onKeyReference(makeKeyName(referent), byReference);
+                        visitor.onKeyReference(key, byReference);
                     } else {
-                        visitor.onKey(makeKeyName(referent));
+                        visitor.onKey(key);
                         val(inObject, visitor, ids, attributeType(modelType, clazz, referent.attribute)?.type else `Nothing`, ref.item);
                     }
                 }

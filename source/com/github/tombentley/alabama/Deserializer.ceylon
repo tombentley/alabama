@@ -19,7 +19,8 @@ import ceylon.language.meta {
     typeLiteral
 }
 import ceylon.language.meta.declaration {
-    ValueDeclaration
+    ValueDeclaration,
+    ClassOrInterfaceDeclaration
 }
 import ceylon.language.meta.model {
     Class,
@@ -33,9 +34,6 @@ import ceylon.language.meta.model {
 import ceylon.language.serialization {
     DeserializationContext,
     deser=deserialization
-}
-import com.github.tombentley.typeparser {
-    TypeParser
 }
 
 
@@ -51,6 +49,13 @@ class Builder<Id>(DeserializationContext<Id> dc, clazz, id)
         //print("bindAttribute(``attributeName``, ``attributeValue``) ``clazz``");
         //assert(exists attr = clazz.getAttribute<Nothing,Anything>(attributeName)); 
         ValueDeclaration vd = attribute.declaration;
+        /*assert(is ClassOrInterfaceDeclaration c=vd1.container);
+        ValueDeclaration vd;
+        if (exists vd2 = c.getMemberDeclaration<ValueDeclaration>(vd1.name)) {
+            vd = vd2;
+        } else {
+            vd = vd1;
+        }*/
         if (vd.name.startsWith("@")) {
             dc.attribute(id, vd, attributeValue);
         } else {

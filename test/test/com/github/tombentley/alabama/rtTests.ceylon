@@ -1055,9 +1055,70 @@ test
 shared void rtCyclicVariable() {
     fail("need to test this");
 }
+ */
+
+serializable class CollidingAttributeX() {
+    String s = "non-shared";
+    shared String capture() => s;
+}
+serializable class CollidingAttributeY() 
+        extends CollidingAttributeX() {
+    shared default String s = "shared";
+}
+serializable class CollidingAttributeZ(String s="distinct,non-shared") 
+        extends CollidingAttributeY() {
+    shared String capture2() => s;
+    
+}
+
+serializable class CollidingAttributeA() 
+        extends CollidingAttributeY() {
+    shared actual String s = "tricksy";
+    shared String capture3() => super.s;
+    
+}
 
 test
 shared void rtCollidingAttribute() {
-    fail("need to test this");
+    value cas = CollidingAttributeX();
+    variable value json = serialize(cas, true);
+    print(json);
+    assertEquals{
+        actual = json;
+        expected = """{
+                       "s": "non-shared"
+                      }""";
+    };
+    json = serialize(CollidingAttributeY(), true);
+    print(json);
+    assertEquals{
+        actual = json;
+        expected = """{
+                       "CollidingAttributeX.s": "non-shared",
+                       "s": "shared"
+                      }""";
+    };
+    json = serialize(CollidingAttributeZ(), true);
+    print(json);
+    assertEquals{
+        actual = json;
+        expected = """{
+                       "CollidingAttributeX.s": "non-shared",
+                       "s": "shared",
+                       "CollidingAttributeZ.s": "distinct,non-shared"
+                      }""";
+    };
+    json = serialize(CollidingAttributeA(), true);
+    print(json);
+    assertEquals{
+        actual = json;
+        expected = """{
+                       "CollidingAttributeX.s": "non-shared",
+                       "CollidingAttributeY.s": "shared",
+                       "CollidingAttributeA.s": "tricksy"
+                      }""";
+    };
+    
+    value r = deserialize<CollidingAttributeZ>(json);
+    assertEquals(r, cas);
 }
-*/

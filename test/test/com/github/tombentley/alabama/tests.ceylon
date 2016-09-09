@@ -376,7 +376,7 @@ shared void serializeCollidingAttribute() {
     // TODO when not renamed, do I care?
     assertEquals(serialize(CollisionSub(42, "super"), true),
         """{
-            "collides": "super",
+            "AttributeCollision.collides": "super",
             "collides": 42
            }""");
     

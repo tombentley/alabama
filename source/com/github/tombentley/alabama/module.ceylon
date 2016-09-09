@@ -134,6 +134,6 @@
    """
 module com.github.tombentley.alabama "1.0.0" {
     import com.github.tombentley.typeparser "1.0.3";
-    shared import ceylon.json "1.2.1";
-    import ceylon.collection "1.2.1";
+    shared import ceylon.json "1.3.0";
+    import ceylon.collection "1.3.0";
 }
