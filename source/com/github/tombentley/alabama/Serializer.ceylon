@@ -1,8 +1,6 @@
 import ceylon.collection {
     HashMap,
     IdentityMap,
-    HashSet,
-    Stability,
     Hashtable,
     unlinked
 }
@@ -25,17 +23,7 @@ import ceylon.language.serialization {
     Outer,
     Element,
     serialization,
-    uninitializedLateValue,
-    References
-}
-import com.github.tombentley.typeparser {
-    TypeParser
-}
-import ceylon.language.meta.declaration {
-    ValueDeclaration,
-    ClassOrInterfaceDeclaration,
-    ClassDeclaration,
-    OpenClassOrInterfaceType
+    uninitializedLateValue
 }
 
 /*

@@ -19,8 +19,7 @@ import ceylon.language.meta {
     typeLiteral
 }
 import ceylon.language.meta.declaration {
-    ValueDeclaration,
-    ClassOrInterfaceDeclaration
+    ValueDeclaration
 }
 import ceylon.language.meta.model {
     Class,

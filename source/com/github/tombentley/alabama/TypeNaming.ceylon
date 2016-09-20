@@ -1,6 +1,9 @@
 import ceylon.collection {
-    HashMap,
-    linked
+    HashMap
+}
+import ceylon.language.meta.declaration {
+    Package,
+    ClassOrInterfaceDeclaration
 }
 import ceylon.language.meta.model {
     Type
@@ -9,10 +12,6 @@ import ceylon.language.meta.model {
 import com.github.tombentley.typeparser {
     TypeParser,
     TypeFormatter
-}
-import ceylon.language.meta.declaration {
-    Package,
-    ClassOrInterfaceDeclaration
 }
 
 """A contract for converting between types and "type names" in an 
