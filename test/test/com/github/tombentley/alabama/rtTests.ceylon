@@ -232,7 +232,7 @@ shared void rtTupleWithRest() {
     json = serialize(tuple of Object, true);
     assertEquals{
         expected = """{
-                       "class": "ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::String|ceylon.language::true,ceylon.language::Integer,ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::String|ceylon.language::true,ceylon.language::String,ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::true,ceylon.language::true,ceylon.language::Span<ceylon.language::Integer>>>>",
+                       "class": "ceylon.language::Tuple<ceylon.language::true|ceylon.language::String|ceylon.language::Integer,ceylon.language::Integer,ceylon.language::Tuple<ceylon.language::true|ceylon.language::String|ceylon.language::Integer,ceylon.language::String,ceylon.language::Tuple<ceylon.language::Integer|ceylon.language::true,ceylon.language::true,ceylon.language::Span<ceylon.language::Integer>>>>",
                        "value": [
                         1,
                         "2",
