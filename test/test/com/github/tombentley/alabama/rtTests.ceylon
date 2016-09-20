@@ -24,18 +24,30 @@ shared void rtEmptyArray() {
     
     // with static type info
     variable value json = serialize(a, false);
-    assertEquals(json, """[]""");
+    assertEquals {
+        actual = json;
+        expected = """[]""";
+    };
     variable value a2 = deserialize<Array<Anything>>(json);
-    assertEquals(a2.size, 0);
+    assertEquals {
+        actual = a2.size;
+        expected = 0;
+    };
     assert(! a2[0] exists);
     
     // without static type info
     a = Array<Integer>{};
     json = serialize<Object>(a, false);
-    assertEquals(json, """{"class":"ceylon.language::Array<ceylon.language::Integer>","value":[]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Array<ceylon.language::Integer>","value":[]}""";
+    };
     value a3 = deserialize<Object>(json);
     assert(is Array<Integer> a3);
-    assertEquals(a3.size, 0);
+    assertEquals {
+        actual = a3.size;
+        expected = 0;
+    };
     assert(! a3[0] exists);
 }
 
@@ -45,19 +57,31 @@ shared void rtArray() {
     
     // with static type info
     variable value json = serialize(a, false);
-    assertEquals(json, """[1,2,3]""");
+    assertEquals {
+        actual = json;
+        expected = """[1,2,3]""";
+    };
     value a2 = deserialize<Array<Anything>>(json);
-    assertEquals(a2.size, 3);
+    assertEquals {
+        actual = a2.size;
+        expected = 3;
+    };
     assert(exists a20=a2[0], a20 == 1);
     assert(exists a21=a2[1], a21 == 2);
     assert(exists a22=a2[2], a22 == 3);
     
     // without static type info
     json = serialize<Object>(a, false);
-    assertEquals(json, """{"class":"ceylon.language::Array<ceylon.language::Integer>","value":[1,2,3]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Array<ceylon.language::Integer>","value":[1,2,3]}""";
+    };
     value a3 = deserialize<Object>(json);
     assert(is Array<Integer> a3);
-    assertEquals(a3.size, 3);
+    assertEquals {
+        actual = a3.size;
+        expected = 3;
+    };
     assert(exists a30=a2[0], a30 == 1);
     assert(exists a31=a2[1], a31 == 2);
     assert(exists a32=a2[2], a32 == 3);
@@ -70,13 +94,19 @@ shared void rtCyclicArray() {
     
     // with static type info
     variable value json = serialize(l, false);
-    assertEquals(json, """{"#":1,"value":[{"@":1}]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"#":1,"value":[{"@":1}]}""";
+    };
     variable value y = deserialize<Array<Anything>>(json);
     assert(is Identifiable x=y[0], x === y); 
     
     // without static type info
     json = serialize(l of Object, false);
-    assertEquals(json, """{"class":"ceylon.language::Array<ceylon.language::Anything>","#":1,"value":[{"@":1}]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Array<ceylon.language::Anything>","#":1,"value":[{"@":1}]}""";
+    };
     value y2 = deserialize<Object>(json);
     assert(is Array<Anything> y2);
     assert(is Identifiable x2=y2[0], x2 === y2);
@@ -91,14 +121,20 @@ shared void testIdentifiableAndArray() {
     
     // with static type info
     variable value json = serialize(s, false);
-    assertEquals(json, """{"key":{"#":1},"item":[{"@":1}]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"key":{"#":1},"item":[{"@":1}]}""";
+    };
     variable value y = deserialize<Foo->Array<Foo>>(json);
     assert(exists a= y.item[0], 
         y.key === a);
     
     // without static type info
     json = serialize<Object>(s, false);
-    assertEquals(json, """{"class":"ceylon.language::Entry<test.com.github.tombentley.alabama::Foo,ceylon.language::Array<test.com.github.tombentley.alabama::Foo>>","key":{"#":1},"item":[{"@":1}]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Entry<test.com.github.tombentley.alabama::Foo,ceylon.language::Array<test.com.github.tombentley.alabama::Foo>>","key":{"#":1},"item":[{"@":1}]}""";
+    };
     assert(is Foo->Array<Foo> z = deserialize<Object>(json));
     assert(exists b= z.item[0], 
         z.key === b);
@@ -111,21 +147,30 @@ shared void rtTuple() {
     
     // with static type info
     variable value json = serialize(tuple1, false);
-    assertEquals(json, """[1,"2",true]""");
+    assertEquals {
+        actual = json;
+        expected = """[1,"2",true]""";
+    };
     assertEquals {
         actual = deserialize<[Integer, String, Boolean]>(json);  
         expected = tuple1; 
     };
     
     json = serialize([Generic("S")], false);
-    assertEquals(json, """[{"element":"S"}]""");
+    assertEquals {
+        actual = json;
+        expected = """[{"element":"S"}]""";
+    };
     assertEquals { 
         actual = deserialize<[Generic<String>]>(json)[0].element; 
         expected = "S"; 
     };
     
     json = serialize(Generic(tuple1), false);
-    assertEquals(json, """{"element":[1,"2",true]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"element":[1,"2",true]}""";
+    };
     assertEquals { 
         actual = deserialize<Generic<[Integer, String, Boolean]>>(json).element; 
         expected = tuple1;
@@ -213,13 +258,19 @@ shared void rtArraySequence() {
     
     // with static type info
     variable value json = serialize(as);
-    assertEquals(json, """[1,"2",true]""");
+    assertEquals {
+        actual = json;
+        expected = """[1,"2",true]""";
+    };
     value as2 = deserialize<ArraySequence<Integer|String|Boolean>>(json);
     assert(as2 == as);
     
     // without static type info
     json = serialize<Object>(as);
-    assertEquals(json, """{"class":"ceylon.language::ArraySequence<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>","value":[1,"2",true]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::ArraySequence<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>","value":[1,"2",true]}""";
+    };
     assert(is ArraySequence<Integer|String|Boolean> as3 = deserialize<Object>(json));
     assert(as3 == as);
 }
@@ -231,13 +282,19 @@ shared void rtArraySequenceInGeneric() {
     
     // with static type info
     variable value json = serialize(g);
-    assertEquals(json, """{"element":[1,"2",true]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"element":[1,"2",true]}""";
+    };
     value as3 = deserialize<Generic<ArraySequence<Integer|String|Boolean>>>(json);
     assert(as3.element == as);
     
     // without static type info
     json = serialize<Object>(g);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::ArraySequence<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>>","element":[1,"2",true]}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::ArraySequence<ceylon.language::Integer|ceylon.language::String|ceylon.language::Boolean>>","element":[1,"2",true]}""";
+    };
     assert(is Generic<ArraySequence<Integer|String|Boolean>> as4 = deserialize<Object>(json));
     assert(as4.element == as);
     
@@ -252,53 +309,103 @@ test
 shared void rtString() {
     // with static type info
     variable String json = serialize("hello, world");
-    assertEquals(json, """"hello, world"""");
-    assertEquals(deserialize<String>(json), "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """"hello, world"""";
+    };
+    assertEquals {
+        actual = deserialize<String>(json);
+        expected = "hello, world";
+    };
     
     // without static type info
     json = serialize("hello, world" of Object);
-    assertEquals(json, """"hello, world"""");
-    assertEquals(deserialize<Object>(json), "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """"hello, world"""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = "hello, world";
+    };
     
     json = serialize("hello, world" of String?);
-    assertEquals(json, """"hello, world"""");
-    assertEquals(deserialize<String?>(json), "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """"hello, world"""";
+    };
+    assertEquals {
+        actual = deserialize<String?>(json);
+        expected = "hello, world";
+    };
 }
 
 test
 shared void rtInteger() {
     // with static type info
     variable String json = serialize(42);
-    assertEquals(json, """42""");
-    assertEquals(deserialize<Integer>(json), 42);
+    assertEquals {
+        actual = json;
+        expected = """42""";
+    };
+    assertEquals {
+        actual = deserialize<Integer>(json);
+        expected = 42;
+    };
     
     // without static type info
     json = serialize(42 of Object);
-    assertEquals(json, """42""");
-    assertEquals(deserialize<Object>(json), 42);
+    assertEquals {
+        actual = json;
+        expected = """42""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = 42;
+    };
 }
 
 test
 shared void rtFloat() {
     // with static type info
     variable String json = serialize(42.5);
-    assertEquals(json, """42.5""");
-    assertEquals(deserialize<Float>(json), 42.5);
+    assertEquals {
+        actual = json;
+        expected = """42.5""";
+    };
+    assertEquals {
+        actual = deserialize<Float>(json);
+        expected = 42.5;
+    };
     
     // without static type info
     json = serialize(42.5 of Object);
-    assertEquals(json, """42.5""");
-    assertEquals(deserialize<Object>(json), 42.5);
+    assertEquals {
+        actual = json;
+        expected = """42.5""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = 42.5;
+    };
 }
 
 test
 shared void rtMinusZero() {
     // with static type info
     variable String json = serialize(-0.0);
-    assertEquals(json, """-0.0""");
+    assertEquals {
+        actual = json;
+        expected = """-0.0""";
+    };
     value got = deserialize<Float>(json);
-    assertEquals(got, -0.0);
-    assertTrue(got.strictlyNegative);
+    assertEquals {
+        actual = got;
+        expected = -0.0;
+    };
+    assertTrue {
+        condition = got.strictlyNegative;
+    };
     
     // TODO without static type info
 }
@@ -307,12 +414,18 @@ test
 shared void rtNaN() {
     // with static type info
     variable String json = serialize(0.0/0.0);
-    assertEquals(json, """"NaN"""");
+    assertEquals {
+        actual = json;
+        expected = """"NaN"""";
+    };
     assertTrue(deserialize<Float>(json).undefined);
     
     // without static type info
     json = serialize<Object>(0.0/0.0);
-    assertEquals(json, """{"class":"ceylon.language::Float","value":"NaN"}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Float","value":"NaN"}""";
+    };
     assertTrue(deserialize<Float>(json).undefined);
 }
 
@@ -320,38 +433,74 @@ test
 shared void rtInfinity() {
     // with static type info
     variable String json = serialize(infinity);
-    assertEquals(json, """"∞"""");
-    assertEquals(deserialize<Float>(json), infinity);
+    assertEquals {
+        actual = json;
+        expected = """"∞"""";
+    };
+    assertEquals {
+        actual = deserialize<Float>(json);
+        expected = infinity;
+    };
     
     // without static type info
     json = serialize<Object>(infinity);
-    assertEquals(json, """{"class":"ceylon.language::Float","value":"∞"}""");
-    assertEquals(deserialize<Float>(json), infinity);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Float","value":"∞"}""";
+    };
+    assertEquals {
+        actual = deserialize<Float>(json);
+        expected = infinity;
+    };
 }
 test
 shared void rtNegativeInfinity() {
     // with static type info
     variable String json = serialize(-infinity);
-    assertEquals(json, """"-∞"""");
-    assertEquals(deserialize<Float>(json), -infinity);
+    assertEquals {
+        actual = json;
+        expected = """"-∞"""";
+    };
+    assertEquals {
+        actual = deserialize<Float>(json);
+        expected = -infinity;
+    };
     
     // without static type info
     json = serialize<Object>(-infinity);
-    assertEquals(json, """{"class":"ceylon.language::Float","value":"-∞"}""");
-    assertEquals(deserialize<Float>(json), -infinity);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Float","value":"-∞"}""";
+    };
+    assertEquals {
+        actual = deserialize<Float>(json);
+        expected = -infinity;
+    };
 }
 
 test
 shared void rtInfinityInTuple() {
     // with static type info
     variable String json = serialize([infinity]);
-    assertEquals(json, """["∞"]""");
-    assertEquals(deserialize<[Float]>(json), [infinity]);
+    assertEquals {
+        actual = json;
+        expected = """["∞"]""";
+    };
+    assertEquals {
+        actual = deserialize<[Float]>(json);
+        expected = [infinity];
+    };
     
     // without static type info
     json = serialize<Object>([infinity]);
-    assertEquals(json, """{"class":"ceylon.language::Tuple<ceylon.language::Float,ceylon.language::Float,ceylon.language::empty>","value":[{"class":"ceylon.language::Float","value":"∞"}]}""");
-    assertEquals(deserialize<Object>(json), [infinity]);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Tuple<ceylon.language::Float,ceylon.language::Float,ceylon.language::empty>","value":[{"class":"ceylon.language::Float","value":"∞"}]}""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = [infinity];
+    };
     
 }
 
@@ -359,39 +508,75 @@ test
 shared void rtBoolean() {
     // with static type info
     variable String json = serialize(true);
-    assertEquals(json, """true""");
-    assertEquals(deserialize<Boolean>(json), true);
+    assertEquals {
+        actual = json;
+        expected = """true""";
+    };
+    assertEquals {
+        actual = deserialize<Boolean>(json);
+        expected = true;
+    };
     
     // without static type info
     json = serialize(true of Object);
-    assertEquals(json, """true""");
-    assertEquals(deserialize<Object>(json), true);
+    assertEquals {
+        actual = json;
+        expected = """true""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = true;
+    };
 }
 
 test
 shared void rtNull() {
     // without static type info
     variable String json = serialize(null);
-    assertEquals(json, """null""");
-    assertEquals(deserialize<Anything>(json), null);
+    assertEquals {
+        actual = json;
+        expected = """null""";
+    };
+    assertEquals {
+        actual = deserialize<Anything>(json);
+        expected = null;
+    };
     
     // with static type info (as much as possible, anyway)
     json = serialize(null of String?);
-    assertEquals(json, """null""");
-    assertEquals(deserialize<String?>(json), null);
+    assertEquals {
+        actual = json;
+        expected = """null""";
+    };
+    assertEquals {
+        actual = deserialize<String?>(json);
+        expected = null;
+    };
 }
 
 test
 shared void rtCharacter() {
     // with static type info
     variable String json = serialize('x');
-    assertEquals(json, """"x"""");
-    assertEquals(deserialize<Character>(json), 'x');
+    assertEquals {
+        actual = json;
+        expected = """"x"""";
+    };
+    assertEquals {
+        actual = deserialize<Character>(json);
+        expected = 'x';
+    };
     
     // without static type info
     json = serialize<Object>('x' of Object);
-    assertEquals(json, """{"class":"ceylon.language::Character","value":"x"}""");
-    assertEquals(deserialize<Object>(json), 'x');
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::Character","value":"x"}""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = 'x';
+    };
 }
 
 
@@ -399,13 +584,25 @@ test
 shared void rtEmpty() {
     // with static type info
     variable String json = serialize([]);
-    assertEquals(json, """{"class":"ceylon.language::empty"}""");
-    assertEquals(deserialize<[]>(json), []);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::empty"}""";
+    };
+    assertEquals {
+        actual = deserialize<[]>(json);
+        expected = [];
+    };
     
     // without static type info
     json = serialize<Object>([]);
-    assertEquals(json, """{"class":"ceylon.language::empty"}""");
-    assertEquals(deserialize<Object>(json), []);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::empty"}""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = [];
+    };
 }
 
 test
@@ -416,14 +613,29 @@ shared void rtLarger() {
     
     // with static type info
     variable String json = serialize(larger);
-    assertEquals(json, """{"class":"ceylon.language::larger"}""");
-    assertEquals(deserialize<\Ilarger>(json), larger);
-    assertEquals(deserialize<Comparison>(json), larger);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::larger"}""";
+    };
+    assertEquals {
+        actual = deserialize<\Ilarger>(json);
+        expected = larger;
+    };
+    assertEquals {
+        actual = deserialize<Comparison>(json);
+        expected = larger;
+    };
     
     // without static type info
     json = serialize(larger of Object);
-    assertEquals(json, """{"class":"ceylon.language::larger"}""");
-    assertEquals(deserialize<Object>(json), larger);
+    assertEquals {
+        actual = json;
+        expected = """{"class":"ceylon.language::larger"}""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json);
+        expected = larger;
+    };
 }
 
 serializable class StringContainer(string) {
@@ -435,13 +647,25 @@ test
 shared void rtStringContainer() {
     // with static type info
     variable String json = serialize(StringContainer("hello, world"));
-    assertEquals(json, """{"string":"hello, world"}""");
-    assertEquals(deserialize<StringContainer>(json).string, "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """{"string":"hello, world"}""";
+    };
+    assertEquals {
+        actual = deserialize<StringContainer>(json).string;
+        expected = "hello, world";
+    };
     
     // with static type info
     json = serialize(StringContainer("hello, world") of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::StringContainer","string":"hello, world"}""");
-    assertEquals(deserialize<Object>(json).string, "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::StringContainer","string":"hello, world"}""";
+    };
+    assertEquals {
+        actual = deserialize<Object>(json).string;
+        expected = "hello, world";
+    };
 }
 
 
@@ -456,14 +680,26 @@ shared void rtGenericString() {
     
     // with static type info
     variable String json = serialize(generic);
-    assertEquals(json, """{"element":"hello, world"}""");
-    assertEquals(deserialize<Generic<String>>(json).element, "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """{"element":"hello, world"}""";
+    };
+    assertEquals {
+        actual = deserialize<Generic<String>>(json).element;
+        expected = "hello, world";
+    };
     
     // without static type info
     json = serialize(generic of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::String>","element":"hello, world"}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::String>","element":"hello, world"}""";
+    };
     assert(is Generic<String> o = deserialize<Object>(json));
-    assertEquals(o.element, "hello, world");
+    assertEquals {
+        actual = o.element;
+        expected = "hello, world";
+    };
 }
 
 test
@@ -472,14 +708,26 @@ shared void rtGenericOptionalString() {
     
     // with static type info
     variable String json = serialize(hello);
-    assertEquals(json, """{"element":"hello, world"}""");
-    assertEquals(deserialize<Generic<String?>>(json).element, "hello, world");
+    assertEquals {
+        actual = json;
+        expected = """{"element":"hello, world"}""";
+    };
+    assertEquals {
+        actual = deserialize<Generic<String?>>(json).element;
+        expected = "hello, world";
+    };
     
     // without static type info
     json = serialize(hello of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":"hello, world"}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":"hello, world"}""";
+    };
     assert(is Generic<String?> o = deserialize<Object>(json));
-    assertEquals(o.element, "hello, world");
+    assertEquals {
+        actual = o.element;
+        expected = "hello, world";
+    };
 }
 test
 shared void rtGenericOptionalStringNull() {
@@ -487,14 +735,26 @@ shared void rtGenericOptionalStringNull() {
     
     // with static type info
     variable value json = serialize(nul);
-    assertEquals(json, """{"element":null}""");
-    assertEquals(deserialize<Generic<String?>>(json).element, null);
+    assertEquals {
+        actual = json;
+        expected = """{"element":null}""";
+    };
+    assertEquals {
+        actual = deserialize<Generic<String?>>(json).element;
+        expected = null;
+    };
     
     // without static type info
     json = serialize(nul of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":null}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Null|ceylon.language::String>","element":null}""";
+    };
     assert(is Generic<String?> o2 = deserialize<Object>(json));
-    assertEquals(o2.element, null);
+    assertEquals {
+        actual = o2.element;
+        expected = null;
+    };
 }
 
 test
@@ -503,14 +763,26 @@ shared void rtGenericCharacter() {
     
     // with static type info
     variable String json = serialize(x);
-    assertEquals(json, """{"element":"x"}""");
-    assertEquals(deserialize<Generic<Character>>(json).element, 'x');
+    assertEquals {
+        actual = json;
+        expected = """{"element":"x"}""";
+    };
+    assertEquals {
+        actual = deserialize<Generic<Character>>(json).element;
+        expected = 'x';
+    };
     
     // with static type info
     json = serialize(x of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Character>","element":"x"}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Character>","element":"x"}""";
+    };
     assert(is Generic<Character> o = deserialize<Object>(json));
-    assertEquals(o.element, 'x');
+    assertEquals {
+        actual = o.element;
+        expected = 'x';
+    };
 }
 
 test
@@ -519,14 +791,26 @@ shared void rtGenericEmpty() {
     
     // with static type info
     variable String json = serialize(a);
-    assertEquals(json, """{"element":{"class":"ceylon.language::empty"}}""");
-    assertEquals(deserialize<Generic<String[]>>(json).element, []);
+    assertEquals {
+        actual = json;
+        expected = """{"element":{"class":"ceylon.language::empty"}}""";
+    };
+    assertEquals {
+        actual = deserialize<Generic<String[]>>(json).element;
+        expected = [];
+    };
     
     // without static type info
     json = serialize(a of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Sequential<ceylon.language::String>>","element":{"class":"ceylon.language::empty"}}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Sequential<ceylon.language::String>>","element":{"class":"ceylon.language::empty"}}""";
+    };
     assert(is Generic<String[]> o = deserialize<Object>(json));
-    assertEquals(o.element, []);
+    assertEquals {
+        actual = o.element;
+        expected = [];
+    };
 }
 
 test
@@ -535,14 +819,26 @@ shared void rtGenericLarger() {
     
     // with static type info
     variable String json = serialize(generic);
-    assertEquals(json, """{"element":{"class":"ceylon.language::larger"}}""");
-    assertEquals(deserialize<Generic<Comparison>>(json).element, larger);
+    assertEquals {
+        actual = json;
+        expected = """{"element":{"class":"ceylon.language::larger"}}""";
+    };
+    assertEquals {
+        actual = deserialize<Generic<Comparison>>(json).element;
+        expected = larger;
+    };
     
     // without static type info
     json = serialize(generic of Object);
-    assertEquals(json, """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Comparison>","element":{"class":"ceylon.language::larger"}}""");
+    assertEquals {
+        actual = json;
+        expected = """{"class":"test.com.github.tombentley.alabama::Generic<ceylon.language::Comparison>","element":{"class":"ceylon.language::larger"}}""";
+    };
     assert(is Generic<Comparison> o = deserialize<Object>(json));
-    assertEquals(o.element, larger);
+    assertEquals {
+        actual = o.element;
+        expected = larger;
+    };
 }
 
 serializable class Late() {
