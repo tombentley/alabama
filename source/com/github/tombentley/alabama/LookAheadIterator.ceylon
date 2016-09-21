@@ -13,7 +13,9 @@ class Looked<out Item>(item, column, line, position) {
     shared actual String string => item?.string else "<null>";
 }
 
+//"The type of [[notStarted]]."
 shared abstract class NotStarted() of notStarted {}
+"A state of [[LookAheadIterator]] when it has not yet consumed any input."
 shared object notStarted extends NotStarted() {}
 
 // TODO only shared for testing purposes

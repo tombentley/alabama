@@ -33,7 +33,9 @@ import ceylon.language.serialization {
     it couldn't be infered from the model) 
  */
 
-"A utility for serializing an instance to a JSON-formatted String."
+"""A utility for serializing an instance to a JSON-formatted `String`.
+ 
+   [[Serializer]] should be used when outputting to non-`String`s."""
 shared String serialize<Instance>(
     rootInstance, 
     pretty = false,
@@ -130,8 +132,10 @@ object inObject extends State(true){}
 object inWrapper extends State(true){}
 object inArray extends State(false){}
 
-"""A Serializer converts a tree of Ceylon objects to JSON. 
-   It's not much more than a way to introspect an recurse through an object tree, really."""
+"""Converts a graph of Ceylon objects to JSON.
+   
+   [[Deserializer]] peforms the reverse function of deserializing the JSON
+   obtained for this class back into a graph of Ceylon objects."""
 see(`function serialize`)
 shared class Serializer(
     TypeNaming typeNaming = TypeExpressionTypeNaming(),

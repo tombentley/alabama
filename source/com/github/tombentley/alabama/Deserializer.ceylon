@@ -208,6 +208,20 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String 
     }
 }
 
+"""Deserializes JSON into a graph of Ceylon objects.
+   
+   [[Serializer]] peforms the reverse function of 
+   serializing a graph of Ceylon objects
+   into JSON.
+   
+   It is possible to feed this class JSON that was not emitted by a
+   [[Serializer]], it would need to be compatible with the JSON that the
+   [[Serializer]] would emit for a particular object graph: The Deserializer
+   doesn't deserialize *arbitrary* JSON.
+   
+   The `Instance` type parameter is the type of root instance that this 
+   deserializer is expected to produce.
+   """
 shared class Deserializer<out Instance>(Type<Instance> clazz, 
     TypeNaming? typeNaming, String? typeProperty) {
     
@@ -228,6 +242,8 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         return i;
     }
     
+    "Deserialize JSON data read from the given `input`, returning the 
+     root instance."
     shared Instance deserialize(Iterator<BasicEvent>&Positioned input) {
         this.input = LookAheadIterator(input, 2);
         return dc.reconstruct<Instance>(val(false, null, clazz).key);
@@ -610,6 +626,12 @@ Type<> eliminateNull(Type<> type) {
     }
 }
 
+"""Deserialize the given `json` 
+   (presumably the result of a call to a [[Serializer]]) 
+   as if it were an instance of the 
+   given `Instance`.
+   
+   [[Deserializer]] should be used for deserializing non-`String`s."""
 shared Instance deserialize<Instance>(String json, 
     TypeNaming typeNaming = TypeExpressionTypeNaming()) {
     Type<Instance> clazz = typeLiteral<Instance>();
