@@ -58,7 +58,7 @@ shared void profileDeser() {
     variable value hs = 0;
     variable String json=exampleJson;
     print("warmup: deserializing exampleJson ``times`` times");
-    value deserializer = Deserializer(`Invoice`, TypeExpressionTypeNaming(), "class");
+    value deserializer = Deserializer(`Invoice`);
     for (i in 1..times) {
         Invoice invoice = deserializer.deserialize(StreamParser(StringTokenizer(json)));
         if (i == 1) {

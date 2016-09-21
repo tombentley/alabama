@@ -15,7 +15,21 @@ import ceylon.test {
 
 import com.github.tombentley.alabama {
     deserialize,
-    serialize
+    serialize,
+    StringSerializer
+}
+
+import ceylon.time{
+    DateTime,
+    dateTime,
+    Date,
+    date
+}
+import ceylon.language.serialization {
+    SerializationException
+}
+import ceylon.time.iso8601 {
+    parseDate
 }
 
 test
@@ -1423,4 +1437,32 @@ shared void rtCollidingAttribute() {
     
     value r = deserialize<CollidingAttributeZ>(json);
     assertEquals(r, cas);
+}
+
+class DateSerializer() satisfies StringSerializer<Date> {
+    shared actual Date deserialise(String serialForm) {
+        assert(exists r = parseDate(serialForm));
+        return r;
+    }
+    
+    shared actual String serialise(Date instance) {
+        return instance.string;
+    }
+}
+
+test
+shared void rtDate() {
+     Date d = date(2016, 9, 22);
+     value v = Generic(d);
+     
+     try {
+        serialize(v);
+    } catch (SerializationException e){}
+     
+    value json = serialize {
+        rootInstance = v;
+        formatters=map{`Date`->DateSerializer()};
+    };
+    
+    assertEquals(json, "");
 }

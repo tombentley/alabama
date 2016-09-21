@@ -11,16 +11,19 @@ import ceylon.json.stream {
 import ceylon.collection {
     HashMap
 }
+import ceylon.language.meta.model {
+    Type
+}
 shared void run() {
     value deserializer = Deserializer {
         clazz = `Invoice`;
-        typeNaming = LogicalTypeNaming(HashMap{
+        parsers = map{`Type<>`->LogicalTypeNaming(HashMap{
             "Person" -> `Person3`,
             "Address" -> `Address3`,
             "Item" -> `Item`,
             "Product" -> `Product`,
             "Invoice" -> `Invoice`
-        });
+        })};
         typeProperty = "class"; 
     };
     variable value times = 1000;

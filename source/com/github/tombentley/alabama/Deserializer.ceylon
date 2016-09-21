@@ -224,7 +224,7 @@ class ArrayBuilder<Id>(DeserializationContext<Id> dc, arrayId, Id nextId(String 
    deserializer is expected to produce.
    """
 shared class Deserializer<out Instance>(Type<Instance> clazz, 
-    TypeNaming? typeNaming, String? typeProperty) {
+    Correspondence<ClassOrInterface<>,StringSerializer<out Anything>> parsers=map{`Type<>`->TypeExpressionTypeNaming()}, String? typeProperty="class") {
     
     Config config = Config();
     
@@ -236,6 +236,8 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
         //print("allocate id ``id``: ``s``");
         return id;
     }
+    
+    assert(is StringSerializer<out Type<>>? typeNaming = parsers[`Type<>`]);
     
     variable LookAheadIterator<BasicEvent>? input = null;
     LookAheadIterator<BasicEvent> stream {
@@ -264,7 +266,7 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                 k.key == typeProperty) {
                 stream.next();//consume @type
                 if (is String typeName = stream.next()) {
-                    dataType = typeNaming.type(typeName);
+                    dataType = typeNaming.deserialise(typeName);
                 } else {
                     throw Exception("Expected String value for ``typeProperty`` property at ``stream.location``");
                 }
@@ -634,9 +636,10 @@ Type<> eliminateNull(Type<> type) {
    
    [[Deserializer]] should be used for deserializing non-`String`s."""
 shared Instance deserialize<Instance>(String json, 
-    TypeNaming typeNaming = TypeExpressionTypeNaming()) {
+    Correspondence<ClassOrInterface<>,StringSerializer<out Anything>> parsers=map{`Type<>`->TypeExpressionTypeNaming()},
+    String typeProperty="class") {
     Type<Instance> clazz = typeLiteral<Instance>();
-    Deserializer<Instance> deser = Deserializer<Instance>(clazz, typeNaming, "class");
+    Deserializer<Instance> deser = Deserializer<Instance>(clazz, parsers, typeProperty);
     return deser.deserialize(StreamParser(StringTokenizer(json)));
     
 }

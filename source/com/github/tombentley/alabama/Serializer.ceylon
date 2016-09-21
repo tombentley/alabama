@@ -15,7 +15,8 @@ import ceylon.language.meta {
 }
 import ceylon.language.meta.model {
     Type,
-    ClassModel
+    ClassModel,
+    ClassOrInterface
 }
 import ceylon.language.serialization {
     SerializationContext,
@@ -39,13 +40,13 @@ import ceylon.language.serialization {
 shared String serialize<Instance>(
     rootInstance, 
     pretty = false,
-    TypeNaming typeNaming = TypeExpressionTypeNaming()) {
+    Correspondence<ClassOrInterface<>,StringSerializer<in Nothing>> formatters=map{`Type<>`->TypeExpressionTypeNaming()}) {
     "The instance to serialize"
     Instance rootInstance;
     "Whether the returned JSON should be indented"
     Boolean pretty;
     value em = StringEmitter(pretty);
-    Serializer ss = Serializer(typeNaming);
+    Serializer ss = Serializer(formatters);
     ss.serialize<Instance>(em, rootInstance);
     return em.string;
 }
@@ -138,11 +139,20 @@ object inArray extends State(false){}
    obtained for this class back into a graph of Ceylon objects."""
 see(`function serialize`)
 shared class Serializer(
-    TypeNaming typeNaming = TypeExpressionTypeNaming(),
+    Correspondence<ClassOrInterface<>,StringSerializer<in Nothing>> formatters=emptyMap,
     Config config = Config()) {
     Integer singleReference = -1;
     
     SerializationContext sc = serialization();
+    
+    
+    StringSerializer<in Type<>> typeNaming;
+    if(exists tn = formatters[`Type<>`]) {
+        assert(is StringSerializer<in Type<>> tn);
+        typeNaming = tn;
+    } else {
+        typeNaming = TypeExpressionTypeNaming();
+    }
     
     "Find everything reachable from root, 
      giving things reachable via multiple paths an id.
@@ -357,6 +367,7 @@ shared class Serializer(
             InstanceMap<Integer> ids,
             Type<> staticType, 
             Anything instance) {
+        ClassModel<> t = type(instance);
         if (!exists instance) {
             visitor.onNull();
         } else if (is Integer|Float instance) {
@@ -369,15 +380,36 @@ shared class Serializer(
             visitor.onBoolean(instance);
         } else if (!instance is Empty|Range<out Anything>, is Anything[] instance) {
             seq(state, visitor, ids, staticType, instance);
-        } else if (/*type(instance).declaration == `class Array`,// TODO need an isArray() in the metamodel
-            // or more generally isInstanceOf(BaseType)
-                is {Anything*}&Identifiable instance*/
-                is Array<out Anything> instance) {
+        } else if (is Array<out Anything> instance) {
             arr(state, visitor, ids, staticType, instance);
+        } else if (exists formatter = findSerializer(t)) {
+            assert(is StringSerializer<in Anything> formatter);
+            visitor.onString(formatter.serialise(instance));
         } else {
             obj(state, visitor, ids, staticType, instance);
         }
+        
     }
+    
+    StringSerializer<in Anything>? findSerializer(ClassOrInterface<> m) {
+        if (exists r=formatters[m]) {
+            assert(is StringSerializer<in Anything> r);
+            return r;
+        } else {
+            if (exists et=m.extendedType,
+                exists r = findSerializer(et)) {
+                return r;
+            } else {
+                for (st in m.satisfiedTypes) {
+                    if (exists r = findSerializer(st)) {
+                        return r;
+                    }
+                }
+            }
+            return null;        
+        }
+    }
+    
     
     "Serialize the given [[instance]] as events on the given [[visitor]]."
     shared void serialize<Instance>(Visitor visitor, Instance instance) {
@@ -402,7 +434,7 @@ shared class Serializer(
 "Adapter wrapping a JSON-[[Visitor]] used for generating JSON and satisfying
  [[Output]]."
 class Output(Visitor jsonVisitor,
-    TypeNaming typeNaming,
+    StringSerializer<in Type<>> typeNaming,
     String classKey="class",
     String idKey="#",
     String idReferencePrefix="@") {
@@ -414,7 +446,7 @@ class Output(Visitor jsonVisitor,
             result = inWrapper;
         }
         jsonVisitor.onKey(classKey);
-        jsonVisitor.onString(typeNaming.name(type));
+        jsonVisitor.onString(typeNaming.serialise(type));
         return result;
     }
     
