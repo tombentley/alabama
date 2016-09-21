@@ -1,5 +1,5 @@
 """A JSON-based serialization library. This module can be used to 
-   serialize and deserialize object Ceylon graphs to/from JSON.
+   serialize and deserialize Ceylon object graphs to/from JSON.
    
    Efforts are made to make the JSON reasonably idiomatic, 
    while still supporting things like cyclic Ceylon 
@@ -14,14 +14,20 @@
    
    ## 'Simple' classes
    
-   An instance of a simple class will serialize to a JSON object, so given
+   An instance of a simple class will serialize to a JSON object. 
+   Given the class
    
        class Person(first, last) {
            shared String first;
            shared String last;
        }
-       
-   then the root instance `Person("John", "Doe")` will serialize to: 
+   
+   we could serialize an instance like this:
+   
+       value johnDoe = Person(!"John", "Doe");
+       value json = serialize(johnDoe);
+   
+   The JSON will look like this: 
        
    ```javascript
    {
@@ -40,6 +46,9 @@
      notation (with type information added if this would 
      result in ambiguity during deserialization).
    
+   In all other cases instances are decomposed into their constituent 
+   references.
+   
    ## Including type information
    
    Consider deserializing the above example JSON again:
@@ -52,15 +61,20 @@
    ```
    
    Note that it does not include information about the Ceylon class
-   which was serialized to produce this JSON. So unless the 
-   deserializing client knows *a priori* that it is only deserializing 
-   `Person` instances it cannot possibly deserialize it. Thus to be 
-   deserializable by *unspecialized Ceylon clients* 
-   additional type information 
-   needs to be included.
+   which was serialized to produce this JSON.
    
-   Of course if the serialized JSON is never consumed by
-   *unspecialized Ceylon clients* such type information is not needed). 
+   If the deserializing client knows *a priori* that it is deserializing 
+   JSON representing a `Person`, the it is not necessary to include the 
+   type information in the JSON itself. Such a client can deserialize 
+   it like this:
+   
+       value person = deserialize<Person>(json);
+       
+   Note the explicit type argument to `deserialize<>()`!
+   
+   If we know the deserializing client does not know the type of object 
+   it will be deserializing we need to include more type information in the 
+   JSON.
    
    Examples of when such additional type 
    information is needed include:
@@ -79,7 +93,14 @@
               // ...
           }
    
-   Whatever the cause, [[by default|fqTypeNaming]] the type 
+   Whatever the cause, we can include such type information by calling 
+   serialize like this:
+   
+       value json = serialize<Object>(johnDoe);
+       
+   Note the explicit type argument in the call to `serialize()`!
+   
+   [[By default|TypeExpressionTypeNaming]] the type 
    information is included as an additional JSON "class" property:
    
    ```javascript
@@ -90,17 +111,15 @@
    }
    ```
    
-   The "class" key's value is, generally, a Ceylon type expression 
-   (including type arguments for generic types).
-   
-   Alternatively if the serializing client and deserializing client can agree 
-   beforehand a bijective type->name mapping then arbitrary names can be 
+   As an alternative to using type expressions for the "class" value, 
+   the serializing client and deserializing client can agree 
+   beforehand a bijective type->name mapping allowing arbitrary names can be 
    used, see [[LogicalTypeNaming]].
    
    ## Identity
    
    Ceylon instances and the instances they refer to form a directed graph. 
-   On the other hand JSON provides a tree-like syntax. So we have to 
+   JSON provides a tree-like syntax. So we have to 
    handle the possibility of an instance being referred-to multiple 
    times. Moreover there is also the possibility of cyclic instance graphs, 
    where an instance refers (possibly indirectly) to itself.
@@ -130,7 +149,6 @@
    The `Person` has an extra `#` JSON key and subsequent references to that 
    instance use property names prefixed with `@` and with that id value.
    
-    
    """
 module com.github.tombentley.alabama "1.0.0" {
     import com.github.tombentley.typeparser "1.0.3";
