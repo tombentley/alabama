@@ -132,6 +132,7 @@ class SequenceBuilder<Id>(DeserializationContext<Id> dc, sequenceId, Id nextId(S
         return sequenceId->restType;
     }
     
+    suppressWarnings("expressionTypeNothing")
     shared actual Id->ClassModel<> instantiate(
         "A hint at the type originating from the metamodel"
         Type<> modelHint) {

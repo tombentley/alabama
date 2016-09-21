@@ -59,6 +59,7 @@ shared class LookAheadIterator<out Item>(Iterator<Item>&Positioned iterator, Int
     }
     
     "Get the next item in the iterator."
+    suppressWarnings("expressionTypeNothing")
     shared actual Item|Finished next() {
         if (buffer.size > 0) {
             buffer.delete(0);
