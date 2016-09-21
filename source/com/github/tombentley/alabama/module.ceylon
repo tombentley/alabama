@@ -150,7 +150,7 @@
    instance use property names prefixed with `@` and with that id value.
    
    """
-module com.github.tombentley.alabama "1.0.0" {
+module com.github.tombentley.alabama "1.0.1" {
     import com.github.tombentley.typeparser "1.0.3";
     shared import ceylon.json "1.3.0";
     import ceylon.collection "1.3.0";
