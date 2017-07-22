@@ -429,7 +429,19 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     exists referredId = peekElementRef()) {
                     builder.addElement(`Anything`, referredId);
                 } else {
-                    value xx = val(false, null, iteratedType(modelType));
+                    Type<Anything> it;
+                    if (is UnionType<> modelType) {
+                        value first = modelType.caseTypes
+                            .map( iteratedType)
+                            .find( (caseType) => caseType.supertypeOf(type(item)));
+                        assert (exists first);
+                        it = first;
+
+                    } else {
+                        it = iteratedType(modelType);
+                    }
+
+                    value xx = val(false, null, it);
                     builder.addElement(xx.item, xx.key);
                 }
             }
@@ -567,7 +579,7 @@ Type<Anything> iteratedType(Type<Anything> containerType) {
             return `Anything`;
         }
     }
-    
+
     return `Nothing`;
 }
 
