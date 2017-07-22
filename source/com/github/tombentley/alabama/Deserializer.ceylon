@@ -429,7 +429,19 @@ shared class Deserializer<out Instance>(Type<Instance> clazz,
                     exists referredId = peekElementRef()) {
                     builder.addElement(`Anything`, referredId);
                 } else {
-                    value xx = val(false, null, iteratedType(modelType, type(item)));
+                    Type<Anything> it;
+                    if (is UnionType<> modelType) {
+                        value first = modelType.caseTypes
+                            .map( iteratedType)
+                            .find( (caseType) => caseType.supertypeOf(type(item)));
+                        assert (exists first);
+                        it = first;
+
+                    } else {
+                        it = iteratedType(modelType);
+                    }
+
+                    value xx = val(false, null, it);
                     builder.addElement(xx.item, xx.key);
                 }
             }
@@ -554,18 +566,12 @@ Class<Object> bestType(Type<> modelType, Type<> keyType) {
 }
 
 "Given a Type reflecting an Iterable, returns a Type reflecting the 
- iterated type or returns null if the given Type does not reflect an Iterable.
- If Type is UnionType, preferredTypeIfUnion argument is needed to determine preferredType
- "
+ iterated type or returns null if the given Type does not reflect an Iterable"
 by("jvasileff")
-Type<Anything> iteratedType(Type<Anything> containerType, Type<Anything> preferredTypeIfUnion = `Anything`) {
-    return iteratedTypeOrNull(containerType, preferredTypeIfUnion) else `Nothing`;
-}
-
-Type<Anything>? iteratedTypeOrNull(Type<Anything> containerType, Type<Anything> preferredTypeIfUnion) {
+Type<Anything> iteratedType(Type<Anything> containerType) {
     if (is ClassOrInterface<Anything> containerType) {
         if (exists model = containerType.satisfiedTypes
-            .narrow<Interface<Iterable<Anything>>>().first,
+                .narrow<Interface<Iterable<Anything>>>().first,
             exists x = model.typeArgumentList.first) {
             //print("iteratedType(containerType=``containerType``): ``x``");
             return x;
@@ -573,16 +579,8 @@ Type<Anything>? iteratedTypeOrNull(Type<Anything> containerType, Type<Anything> 
             return `Anything`;
         }
     }
-    if (is UnionType<> containerType) {
-        value first = containerType.caseTypes
-            .map( (ct) => iteratedTypeOrNull(ct, preferredTypeIfUnion))
-            .find( (caseType) => caseType.supertypeOf(preferredTypeIfUnion));
-        if (exists first) {
-            return first;
-        }
-    }
 
-    return null;
+    return `Nothing`;
 }
 
 "Figure out the type of the attribute of the given name that's a member of
